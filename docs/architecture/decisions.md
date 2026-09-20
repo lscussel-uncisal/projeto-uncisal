@@ -317,3 +317,53 @@ Certbot 5.8.0) validado end-to-end via SSH automatizado, com verificacao em cada
 prosseguir para a proxima (nunca fechar uma porta sem confirmar que a nova primeiro abre). Fail2Ban
 ja baniu um IP minutos depois do endereco publico existir — evidencia direta de R07/R02 em
 `docs/security/risk-matrix.md` deixarem de ser risco teorico.
+
+---
+
+## ADR-017 — Fail2Ban: jails extras (recidive + Nginx), sem blocklist externa
+
+**Contexto:** o jail `sshd` minimo (ADR/checklist da disciplina) so enxerga ataques na porta 22.
+Perguntado explicitamente se valia reforcar ("modo agressivo", "bot ja reconhecido").
+
+**Decisao:** habilitar dois grupos de jails que ja vem no pacote `fail2ban`, so nao habilitados por
+padrao:
+- `recidive`: le o proprio log do Fail2Ban: um IP banido 3x por qualquer jail em 24h leva ban de
+  1 semana em **todas** as portas (`banaction_allports`), nao so a que ele atacou.
+- `nginx-http-auth`, `nginx-botsearch`, `nginx-bad-request`: cobrem as portas 80/443 (scanners de
+  vulnerabilidade conhecida, requisicoes malformadas) — antes disso, trafego malicioso em 80/443
+  nao gerava ban nenhum.
+
+Deliberadamente **sem** blocklist externa de bots conhecidos (tipo Spamhaus/blocklist.de): a
+aplicacao ja vai ficar atras da Cloudflare em 80/443, cuja inteligencia de ameaca e mais atualizada
+que qualquer lista estatica mantida aqui — duplicar isso so adicionaria complexidade sem ganho real.
+
+**Consequencias:** cobertura de Fail2Ban passa de "so SSH" para "SSH + HTTP/HTTPS + escalonamento
+para reincidentes", sem introduzir dependencia externa. `nginx-limit-req` ficou de fora por exigir
+zonas de rate limiting no Nginx que ainda nao existem (vhost real da aplicacao ainda nao publicado).
+
+---
+
+## ADR-018 — Cloudflare: ajustes de seguranca gratuitos aplicados antes do TLS estar pronto
+
+**Contexto:** ao criar o registro `A` de `uncisal.lserpsistemas.com.br` (proxy ativado), revisamos
+tambem as configuracoes de seguranca do plano Free da Cloudflare.
+
+**Decisoes:**
+- **Bot Fight Mode**: habilitado (estava desligado por padrao).
+- **Minimum TLS Version**: `1.0` (default, inseguro) → `1.2`.
+- **Registros DNS pre-existentes** (MX nulo, SPF `-all`, DMARC `p=reject`) mantidos — ja travam o
+  dominio contra spoofing de e-mail, nao foram tocados.
+- **NAO** subimos o modo SSL/TLS para `Full (strict)` nem habilitamos HSTS na Cloudflare ainda —
+  os dois dependem da origem ter um certificado TLS valido e funcionando primeiro (Certbot, ainda
+  nao rodado com o vhost real). Fazer isso antes da hora arrisca a origem responder erro em toda
+  requisicao HTTPS (`Full strict`) ou travar acesso via HTTP em caso de falha temporaria (`HSTS`
+  com cache longo no navegador do visitante). Ordem completa registrada em
+  `docs/infra/cloudflare-setup.md` → "Proximos passos".
+- **Security Level**: nada a fazer — a Cloudflare descontinuou o controle manual, "always
+  protected" e automatico agora.
+- **Cloudflare Managed Ruleset, Browser Integrity Check, Email Address Obfuscation**: confirmados
+  ja ativos por padrao no plano Free, nenhuma acao necessaria.
+
+**Consequencias:** ganho de seguranca imediato sem nenhum risco de indisponibilidade; os itens que
+dependem do certificado de origem ficam explicitamente sequenciados, evitando a tentacao de
+habilitar tudo de uma vez e quebrar o acesso no meio da configuracao do servidor.
