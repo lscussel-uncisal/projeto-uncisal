@@ -77,6 +77,11 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
   alteração.
 - Escrever toda mensagem de commit em **inglês**, seguindo Conventional Commits — ver
   `CONTRIBUTING.md`. O resto da documentação fica em português; o histórico de commits, não.
+- Depois de dar `git push`, checar se o CI ficou verde antes de empilhar mais trabalho em cima —
+  `pytest` passar localmente não é garantia (ver ADR-021: 8 commits seguidos com CI quebrado por
+  causa de um `collectstatic` que só tinha rodado localmente, nunca detectado a tempo). Checar via
+  `https://github.com/lscussel-uncisal/projeto-uncisal/actions` ou pela API
+  (`git credential fill` + `curl` na API do GitHub — não precisa pedir nada novo ao usuário).
 
 ## Contexto do projeto
 

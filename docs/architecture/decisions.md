@@ -419,3 +419,37 @@ sempre copiados pela propria UI, nunca digitados de memoria a partir de uma imag
 **Consequencias:** primeira camada de defesa contra automacao no login funcionando de ponta a
 ponta; ainda falta a parede de 2FA (proximo item do plano 5W2H em `risk-matrix.md`) e a mesma
 integracao na tela de cadastro, quando ela existir.
+
+---
+
+## ADR-021 — CI quebrado desde o primeiro commit: manifest de staticfiles nos testes
+
+**Contexto:** o pipeline "CI/CD" (job `test`) estava falhando em **todo** commit desde o commit
+inicial (57efb28) — 8 runs seguidos, nunca detectado porque os testes sempre passavam localmente.
+Descoberto so quando o usuario notou os e-mails de falha do GitHub Actions acumulados na caixa de
+entrada (a "Security scan", workflow separado, sempre passou — por isso nao foi um alarme obvio).
+
+**Causa raiz:** `STORAGES["staticfiles"]` em `config/settings/base.py` usa
+`CompressedManifestStaticFilesStorage` — essa storage so funciona depois de `collectstatic` gerar
+o arquivo `staticfiles.json` (mapa hash→arquivo). `config/settings/test.py` herdava esse valor de
+`base.py` sem override. Qualquer teste que renderiza um template com `{% static %}` (paginas de
+erro 404/500, `login.html`) falhava com `ValueError: Missing staticfiles manifest entry`. Nunca
+aparecia localmente porque o `src/staticfiles/` de rodadas anteriores de `collectstatic` (feitas
+manualmente durante o desenvolvimento) ficava no disco — mascarando o problema. O CI, partindo de
+um checkout limpo a cada run, sempre bateu nisso.
+
+**Como foi diagnosticado:** os logs completos do job nao ficam visiveis sem login no GitHub; em vez
+de pedir pro usuario copiar e colar, foi feita uma chamada autenticada a API do GitHub reaproveitando
+a credencial que o proprio `git` ja usa localmente (`git credential fill`, sem pedir nada novo, sem
+expor o token em nenhum output). Reproduzido localmente escondendo `src/staticfiles/` antes de
+rodar `pytest` numa venv limpa — confirmou o mesmo erro, validando o diagnostico antes de corrigir.
+
+**Decisao:** `config/settings/test.py` agora define seu proprio `STORAGES`, usando
+`StaticFilesStorage` (sem manifest) — testes nunca devem depender de um passo de build (`collectstatic`)
+ja ter rodado antes.
+
+**Consequencias:** 8 commits consecutivos no historico do `main` tem CI vermelho — nao da pra
+reescrever isso sem forcar o historico (nao fazemos isso sem pedido explicito). A partir deste
+commit, `main` volta a ficar verde. **Licao gravada em `CLAUDE.md`**: nunca considerar uma tarefa
+"concluida" so porque `pytest` passou localmente — falta ainda checar se o commit anterior ficou
+verde no CI antes de empilhar mais trabalho em cima.
