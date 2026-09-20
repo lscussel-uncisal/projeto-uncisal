@@ -16,6 +16,7 @@ imagem (`ubuntu` no Ubuntu, `debian` no Debian).
 - [x] UFW: `deny incoming` por padrão, liberando apenas 22, 80 e 443
 - [x] Fail2Ban: `jail.local` para `sshd`, `maxretry = 4`, `bantime = 24h` — já baniu 1 IP em minutos
 - [x] Jail `recidive` (reincidência) habilitado: 3 bans/dia → 1 semana banido em todas as portas
+- [x] Jails `nginx-http-auth`/`nginx-botsearch`/`nginx-bad-request` habilitados (cobrem 80/443)
 - [x] Atualizações automáticas de segurança (`unattended-upgrades`) habilitadas
 
 ## 1. Criar usuário de administração dedicado
@@ -129,6 +130,40 @@ sudo fail2ban-client status recidive
 3 bans em 1 dia → 1 semana banido em todas as portas. Não usamos blocklist externa de bots
 conhecidos (tipo Spamhaus) de propósito — a Cloudflare, na frente das portas 80/443, já cobre isso
 com inteligência de ameaça mais atualizada do que qualquer lista estática configurada aqui.
+
+### Jails do Nginx — cobrindo também as portas 80/443
+
+O `sshd`/`recidive` só enxergam ataques na porta 22. Tráfego malicioso em 80/443 (scanners
+procurando `/wp-login.php`, `/phpmyadmin`, requisições HTTP malformadas etc.) não gerava ban
+nenhum até aqui — os filtros já vêm prontos no pacote, só não vinham habilitados:
+
+```bash
+sudo tee -a /etc/fail2ban/jail.local > /dev/null <<'EOF'
+
+[nginx-http-auth]
+enabled = true
+
+[nginx-botsearch]
+enabled = true
+
+[nginx-bad-request]
+enabled = true
+EOF
+
+sudo systemctl restart fail2ban
+sudo fail2ban-client status
+```
+
+- `nginx-http-auth`: tentativas de força bruta em HTTP Basic Auth (não usamos, mas não custa nada
+  deixar ligado).
+- `nginx-botsearch`: scanners procurando paths de vulnerabilidade conhecida (WordPress, phpMyAdmin,
+  `.env`, etc.) — muito comum em qualquer IP exposto na internet, mesmo antes de publicar a
+  aplicação de verdade.
+- `nginx-bad-request`: requisições HTTP malformadas, geralmente sinal de ferramenta automatizada.
+
+Deixamos de fora `nginx-limit-req` por enquanto — exige configurar zonas de rate limiting no
+próprio Nginx primeiro (`docker/nginx/helpdesk.conf`), o que ainda não foi feito; revisar quando o
+vhost real da aplicação for publicado.
 
 ## 5. Atualizações automáticas de segurança
 
