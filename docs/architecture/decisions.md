@@ -367,3 +367,23 @@ tambem as configuracoes de seguranca do plano Free da Cloudflare.
 **Consequencias:** ganho de seguranca imediato sem nenhum risco de indisponibilidade; os itens que
 dependem do certificado de origem ficam explicitamente sequenciados, evitando a tentacao de
 habilitar tudo de uma vez e quebrar o acesso no meio da configuracao do servidor.
+
+---
+
+## ADR-019 — DNSSEC habilitado (assinatura criptografica das respostas DNS)
+
+**Contexto:** sem DNSSEC, nada impede um atacante em posicao de rede privilegiada de forjar
+respostas DNS pra `lserpsistemas.com.br` e redirecionar visitantes pra um servidor falso — o
+HTTPS nem entraria em jogo, porque o navegador nunca chegaria no site real.
+
+**Decisao:** habilitado na Cloudflare, com o DS record publicado no Registro.br (a cadeia de
+confianca do DNSSEC exige isso no registrador pai da zona). Os valores do DS record (Key Tag,
+Algorithm, Digest) foram copiados diretamente da tela da Cloudflare via clique — nunca
+transcritos a mao — porque um DS record incorreto quebraria a resolucao do dominio inteiro para
+qualquer resolver que valide DNSSEC (1.1.1.1, 8.8.8.8, e a maioria dos resolvers publicos).
+Verificacao pos-mudanca feita duas vezes (painel da Cloudflare + consulta DNS publica) antes de
+considerar concluido. Detalhes e comandos de verificacao em `docs/infra/cloudflare-setup.md`.
+
+**Consequencias:** protecao contra spoofing de DNS, sem custo. Unico cuidado permanente: qualquer
+mudanca futura nos nameservers/chaves da zona precisa manter o DS record sincronizado no
+Registro.br, senao a validacao DNSSEC passa a falhar (o oposto do problema que ele resolve).

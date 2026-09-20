@@ -18,6 +18,9 @@
 - [x] Cloudflare Managed Ruleset (WAF) — ja vem ativo por padrao no plano Free
 - [x] Browser Integrity Check — ja vem ativo por padrao
 - [x] Email Address Obfuscation — ja vem ativo por padrao
+- [x] TLS 1.3, Opportunistic Encryption, Automatic HTTPS Rewrites — ja vem ativo por padrao
+- [x] DNSSEC — habilitado na Cloudflare (2026-09-20); DS record cadastrado no Registro.br,
+      aguardando propagacao (confirmar depois com `Resolve-DnsName -Type DS -Server 8.8.8.8`)
 - [ ] SSL/TLS mode: hoje em **`Full`** (nao strict) — sobe para **`Full (strict)`** so depois que
       o Certbot emitir certificado real no servidor (ver `oracle-cloud-setup.md`, secao 9-10, e o
       vhost real em `docker/nginx/helpdesk.conf`)
@@ -45,6 +48,32 @@ O painel de "Recommendations" da Cloudflare sugere criar A/AAAA/CNAME para `www`
 **ignorar as duas**: nem `www` nem a raiz fazem parte do plano (raiz reservada pra pagina
 institucional futura).
 
+## DNSSEC — por que habilitar
+
+Sem DNSSEC, nada impede um atacante em posição de rede privilegiada (ex.: Wi-Fi público malicioso,
+provedor comprometido) de forjar respostas DNS para `lserpsistemas.com.br` e redirecionar
+visitantes para um servidor falso — o cadeado HTTPS nem entraria em jogo, porque o navegador
+nunca chegaria no site real. DNSSEC assina criptograficamente as respostas DNS, permitindo que o
+resolver do visitante detecte e rejeite respostas adulteradas.
+
+Configuracao (gratuita no plano Free):
+1. Cloudflare gera o par de chaves da zona e mostra os dados do **DS record**
+   (Key Tag, Algorithm, Digest Type, Digest).
+2. Esses dados precisam ser publicados no **pai** da zona — nesse caso, o Registro.br, dono do
+   `.com.br` — porque é isso que faz a cadeia de confianca do DNSSEC funcionar (o resolver confia
+   na raiz, a raiz confia no `.br`, o `.br` confia na Cloudflare via esse DS record).
+3. Propagacao pode levar ate 1 hora. Confirmar com:
+   ```powershell
+   Resolve-DnsName -Name lserpsistemas.com.br -Type DS -Server 8.8.8.8
+   ```
+   Um DS record retornado confirma que propagou; enquanto isso, a consulta volta so com o SOA do
+   `.com.br` (resposta negativa padrao).
+
+**Risco explicito assumido:** um DS record incorreto quebra a resolucao do dominio inteiro para
+qualquer resolver que valide DNSSEC (a maioria dos publicos, como 1.1.1.1 e 8.8.8.8) — por isso os
+valores foram copiados diretamente da tela da Cloudflare (nunca digitados a mao) antes de salvar
+no Registro.br.
+
 ## Security Level
 
 A Cloudflare descontinuou o controle manual — "the security level is now fully automated and is
@@ -54,6 +83,12 @@ set to 'always protected' by default". Nada a configurar aqui.
 
 Ver [`docs/security/nao-commitar.md`](../security/nao-commitar.md): a `SITE_KEY` pode aparecer aqui
 (é publica), a `SECRET_KEY` nunca — fica apenas no `.env` do servidor / GitHub Secrets.
+
+## Verificado e nao vale a pena por enquanto
+
+- **Rate Limiting Rules** e **Page Shield** existem no plano Free, mas com escopo limitado.
+  Melhor avaliar depois que a aplicacao real estiver publicada (paths reais de login/API para
+  mirar as regras) — configurar agora seria adivinhar rotas que ainda nao existem.
 
 ## Proximos passos (em ordem)
 
