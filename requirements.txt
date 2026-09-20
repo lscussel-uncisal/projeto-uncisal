@@ -1,7 +1,7 @@
 # Dependencias de producao
 Django>=5.2,<6.0
 django-environ>=0.11
-gunicorn>=22.0
+gunicorn>=26.2.0
 whitenoise>=6.7
 pyotp>=2.9
 qrcode[pil]>=7.4
