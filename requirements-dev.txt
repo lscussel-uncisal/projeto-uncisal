@@ -11,4 +11,4 @@ faker>=26.0
 ruff>=0.6
 black>=24.8
 isort>=5.13
-pre-commit>=3.8
+pre-commit>=4.6.2
