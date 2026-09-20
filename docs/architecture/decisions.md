@@ -283,3 +283,37 @@ ja que o numero ideal de workers difere bastante entre 1 GB e 24 GB de RAM dispo
 **Consequencias:** a imagem builda corretamente em qualquer uma das duas shapes Always Free (ou
 localmente, em Windows/Mac com Apple Silicon) sem exigir nenhuma configuracao manual adicional —
 validado reconstruindo a imagem localmente apos a mudanca (amd64) sem regressao.
+
+---
+
+## ADR-016 — Provisionamento real da instancia: fallback para AMD, chave de deploy dedicada
+
+**Contexto:** execucao real do provisionamento (`docs/infra/oracle-cloud-setup.md`) em `sa-saopaulo-1`.
+
+**Decisoes tomadas durante a execucao:**
+1. **Shape:** Ampere A1 e AMD Micro deram "out of host capacity" na primeira tentativa (comum em
+   regioes pequenas, 1 unico availability domain). AMD Micro liberou pouco depois — instancia
+   criada com `VM.Standard.E2.1.Micro` (1 OCPU / 1 GB), nao a A1 originalmente recomendada.
+   `GUNICORN_WORKERS` (ADR-015) permanece util aqui, com um valor mais conservador em producao.
+2. **IP publico:** o toggle "Automatically assign public IPv4 address" do wizard simplificado nao
+   funcionou ao criar VCN/subnet novas inline — instancia nasceu sem IP publico e sem Internet
+   Gateway. Corrigido depois de criada, sem recriar a instancia: Quick Action "Connect public
+   subnet to internet" (cria o IG) + `VNIC > IP administration > Edit > Public IP type: Reserved
+   public IP > Create new Reserved IP Address`.
+3. **Chave SSH de deploy:** a chave pessoal (`uncisal_oracle`) foi gerada com passphrase (boa
+   pratica — protege a chave no disco do aluno). Isso impede uso em automacao nao-interativa (o
+   agente de IA nao digita passphrase, por regra). Solucao: gerar a chave de deploy
+   (`uncisal_deploy`, ed25519, **sem** passphrase) planejada desde ADR-005 para o GitHub Actions,
+   e usa-la tambem para a configuracao inicial do servidor via SSH automatizado — evita criar uma
+   terceira chave descartavel. O aluno autorizou a chave de deploy no servidor com um unico comando
+   interativo (usando a chave pessoal, digitando a passphrase so essa vez).
+4. **Usuario `deploy`:** criado sem sudo sem senha — nao precisa, so roda `git pull`/`docker
+   compose`, e faz isso pertencendo ao grupo `docker` (nao root). Toda configuracao de root
+   (UFW, Fail2Ban, sshd, instalacao de pacotes) foi feita com o usuario `ubuntu` (sudo sem senha
+   por padrao da imagem), nunca com `deploy`.
+
+**Consequencias:** hardening completo (SSH, UFW, Fail2Ban, unattended-upgrades, Docker, Nginx,
+Certbot 5.8.0) validado end-to-end via SSH automatizado, com verificacao em cada etapa antes de
+prosseguir para a proxima (nunca fechar uma porta sem confirmar que a nova primeiro abre). Fail2Ban
+ja baniu um IP minutos depois do endereco publico existir — evidencia direta de R07/R02 em
+`docs/security/risk-matrix.md` deixarem de ser risco teorico.

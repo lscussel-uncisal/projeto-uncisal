@@ -9,16 +9,16 @@ que está aqui, use a busca do console (ícone de lupa no topo) para achar a tel
 
 ## Checklist
 
-- [ ] Conta Oracle Cloud criada (Always Free)
-- [ ] Par de chaves SSH gerado localmente
-- [ ] Instância criada (Ampere A1 recomendado — ver seção 3) com Ubuntu Server 24.04 LTS
-- [ ] IP público reservado (não efêmero)
-- [ ] Security List liberando 22, 80 e 443
-- [ ] Primeiro acesso SSH confirmado
-- [ ] Hardening de SSH/UFW/Fail2Ban aplicado — ver [`ssh-hardening.md`](ssh-hardening.md)
-- [ ] Docker + Compose instalados
-- [ ] Nginx instalado
-- [ ] Certbot instalado (>= 5.4)
+- [x] Conta Oracle Cloud criada (Always Free)
+- [x] Par de chaves SSH gerado localmente
+- [x] Instância criada (Ampere A1 tentado, capacidade esgotada → `VM.Standard.E2.1.Micro`) com Ubuntu 24.04.4 LTS
+- [x] IP público reservado (não efêmero) — `163.176.75.32`
+- [x] Security List liberando 22, 80 e 443
+- [x] Primeiro acesso SSH confirmado
+- [x] Hardening de SSH/UFW/Fail2Ban aplicado — ver [`ssh-hardening.md`](ssh-hardening.md)
+- [x] Docker + Compose instalados
+- [x] Nginx instalado
+- [x] Certbot instalado (>= 5.4) — 5.8.0
 
 ---
 
@@ -190,7 +190,23 @@ Deve responder `{"status": "ok"}`. Configuração de domínio/Cloudflare/HTTPS/C
 passos, cobertos em [`cloudflare-setup.md`](cloudflare-setup.md) e no workflow
 [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml).
 
-## Observações
+## Observações (execução real — 2026-09-20)
 
-_(preencher com o que for específico da execução real — shape exato escolhido, região, qualquer
-imprevisto do Always Free encontrado na prática)_
+- Região: `sa-saopaulo-1` (Brazil East).
+- Shape efetivamente usada: **`VM.Standard.E2.1.Micro`** (AMD), não a Ampere A1 recomendada —
+  as duas shapes Always Free ficaram momentaneamente sem capacidade ("out of host capacity") em
+  AD-1 durante a criação; o AMD Micro liberou primeiro. Ver ADR-015/ADR-016 em
+  `docs/architecture/decisions.md`.
+- Imagem: Canonical Ubuntu **24.04.4 LTS**, `x86_64`.
+- Nome da instância: `central-chamados-uncisal`.
+- IP público reservado: **`163.176.75.32`**.
+- A opção "Automatically assign public IPv4 address" do wizard de criação não funcionou ao criar
+  a instância com subnet nova inline — a instância nasceu sem IP público e sem Internet Gateway.
+  Corrigido depois, manualmente: Quick Action "Connect public subnet to internet" (cria o IG) +
+  editar o IP privado da VNIC → "Reserved public IP" → "Create new Reserved IP Address".
+- Shielded Instance (Secure Boot/Measured Boot/TPM): não foi possível habilitar nessa combinação
+  de imagem/shape/região (toggles ficaram bloqueados) — seguiu sem, não é requisito da disciplina.
+- Todo o hardening (usuário `deploy`, SSH, UFW, Fail2Ban, unattended-upgrades) e a instalação de
+  Docker/Nginx/Certbot foram executados via SSH automatizado. Fail2Ban já baniu um IP na primeira
+  checagem, minutos depois do IP público existir — confirma que a exposição é real desde o
+  primeiro minuto.

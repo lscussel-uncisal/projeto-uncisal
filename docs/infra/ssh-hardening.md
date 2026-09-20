@@ -9,12 +9,13 @@ imagem (`ubuntu` no Ubuntu, `debian` no Debian).
 
 ## Checklist
 
-- [ ] Usuário não-root dedicado, com `sudo`, usado para toda administração
-- [ ] `PasswordAuthentication no` em `/etc/ssh/sshd_config`
-- [ ] `PermitRootLogin no`
-- [ ] UFW: `deny incoming` por padrão, liberando apenas 22, 80 e 443
-- [ ] Fail2Ban: `jail.local` para `sshd`, `maxretry = 4`, `bantime = 24h`
-- [ ] Atualizações automáticas de segurança (`unattended-upgrades`) habilitadas
+- [x] Usuário não-root dedicado (`deploy`), usado para deploy — SEM sudo sem senha de propósito
+      (não precisa: só roda `git pull`/`docker compose`, está no grupo `docker`)
+- [x] `PasswordAuthentication no` em `/etc/ssh/sshd_config`
+- [x] `PermitRootLogin no`
+- [x] UFW: `deny incoming` por padrão, liberando apenas 22, 80 e 443
+- [x] Fail2Ban: `jail.local` para `sshd`, `maxretry = 4`, `bantime = 24h` — já baniu 1 IP em minutos
+- [x] Atualizações automáticas de segurança (`unattended-upgrades`) habilitadas
 
 ## 1. Criar usuário de administração dedicado
 
