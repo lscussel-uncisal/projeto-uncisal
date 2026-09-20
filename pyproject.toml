@@ -1,0 +1,25 @@
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["apps", "config"]
+src_paths = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "DJ"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+pythonpath = ["src"]
+testpaths = ["src"]
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "--reuse-db -ra"

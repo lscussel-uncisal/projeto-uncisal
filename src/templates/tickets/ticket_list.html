@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Chamados · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold">Chamados</h1>
+    <form method="post" action="{% url 'accounts:logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="text-sm text-slate-600 hover:underline">Sair</button>
+    </form>
+</div>
+
+<div class="bg-white shadow rounded-lg divide-y">
+    {% for ticket in tickets %}
+        <div class="p-4 flex justify-between">
+            <div>
+                <p class="font-medium">{{ ticket.title }}</p>
+                <p class="text-sm text-slate-500">{{ ticket.get_priority_display }}</p>
+            </div>
+            <span class="text-sm px-2 py-1 rounded bg-slate-100">{{ ticket.get_status_display }}</span>
+        </div>
+    {% empty %}
+        <p class="p-4 text-slate-500">Nenhum chamado encontrado.</p>
+    {% endfor %}
+</div>
+{% endblock %}

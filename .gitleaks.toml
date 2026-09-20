@@ -1,0 +1,9 @@
+# Estende as regras padrao do gitleaks — isto NAO substitui a deteccao, so afina um falso
+# positivo conhecido: a mesma senha literal usada como fixture em todos os testes (nunca uma
+# credencial real, nunca usada fora de `apps/*/tests/`).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Senha fixa de fixture usada nos testes (nao e uma credencial real)"
+regexes = ['''senha-forte-123''']

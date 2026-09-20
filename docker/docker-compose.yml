@@ -1,0 +1,26 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: helpdesk:latest
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    volumes:
+      # IMPORTANTE: DATABASE_PATH no .env precisa apontar para dentro deste volume
+      # (ex.: /app/db/db.sqlite3) — senao o SQLite e escrito fora dele e some a cada rebuild.
+      - db_data:/app/db
+      # media/ persiste (conteudo enviado por usuarios, se essa feature existir no futuro).
+      # staticfiles/ NAO precisa de volume: o Whitenoise le do proprio disco do container e
+      # o entrypoint roda "collectstatic" a cada start — regenerado sempre, nunca externo
+      # (o Nginx do host tambem nao le esse caminho — ver docker/nginx/helpdesk.conf).
+      - media_data:/app/media
+    # Publicado apenas em loopback: quem recebe trafego externo e o Nginx do host,
+    # que faz proxy_pass para 127.0.0.1:8000 (menor privilegio).
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  db_data:
+  media_data:

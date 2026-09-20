@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Acesso negado · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto mt-16 bg-white shadow rounded-lg p-6" style="text-align: center;">
+    <h1 class="text-xl font-semibold mb-4">Acesso negado</h1>
+    <p class="text-slate-500">{{ exception|default:"Você não tem permissão para acessar esta página." }}</p>
+</div>
+{% endblock %}

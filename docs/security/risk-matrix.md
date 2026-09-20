@@ -1,0 +1,47 @@
+# Gestão de Risco — Central de Chamados
+
+Este projeto é tratado como projeto, não como exercício isolado: os riscos abaixo foram
+levantados considerando a aplicação em produção (mesmo sendo avaliação acadêmica), e o plano
+de ação usa 5W2H (What/Why/Where/When/Who/How/How much) para cada mitigação relevante.
+
+## Matriz de risco
+
+Probabilidade e Impacto em Baixa/Média/Alta/Crítica. Nível = combinação das duas.
+
+| ID | Risco | Categoria relacionada | Prob. | Impacto | Nível | Mitigação | Status |
+|---|---|---|---|---|---|---|---|
+| R01 | Vazamento de credencial real no repositório público | A02 / requisito Eixo 2 | Média | Alto | **Alto** | `.gitignore`, `gitleaks` (pre-commit + CI), secrets só via `.env`/GitHub Secrets, `CLAUDE.md` como guarda-corrimão para o agente de IA | ✅ Implementado |
+| R02 | Força bruta / credential stuffing no login | A07 | Alta | Alto | **Alto** | `LoginThrottleService` (bloqueio por username e por IP), política de senha (mín. 10 caracteres, `CommonPasswordValidator`) | ✅ Implementado |
+| R03 | Força bruta no código de 2FA | A07 | Média | Alto | **Alto** | Mesmo `LoginThrottleService` (já cobre `INVALID_2FA`), janela curta do TOTP (30s), alerta por e-mail em código incorreto | 🟡 Parcial — throttle pronto, tela de 2FA e alerta por e-mail pendentes |
+| R04 | Escalonamento de privilégio entre papéis (usuário acessando chamado de outro, ou herdando permissão de admin) | A01 | Média | Alto | **Alto** | `TicketService.visible_to`, `role_required`, autorização sempre no backend | 🟡 Parcial — leitura coberta; criar/editar chamado (CRUD de escrita) ainda não implementado, deve seguir o mesmo padrão |
+| R05 | Configuração insegura esquecida em produção (`DEBUG=True`, headers ausentes, segredo fraco) | A02 | Média | Alto | **Alto** | Settings por ambiente, fail-fast em `prod.py`, checklist em `docs/infra/` | ✅ Implementado |
+| R06 | Vazamento do segredo TOTP via dump/backup do banco | A04 | Baixa | Alto | **Médio** | `EncryptedCharField` (Fernet) com `FIELD_ENCRYPTION_KEY` dedicada | ✅ Implementado |
+| R07 | Comprometimento do servidor via SSH (senha fraca/força bruta) | Infra | Alta | Crítico | **Crítico** | Chave SSH obrigatória, `PasswordAuthentication no`, Fail2Ban (4 tentativas / ban 24h), UFW menor privilégio | 🔴 Pendente (aguarda provisionamento da VM) |
+| R08 | Bypass da Cloudflare acessando o servidor de origem diretamente | A05-adjacent / Infra | Média | Alto | **Alto** | UFW liberando 80/443 só para ranges de IP da Cloudflare, Authenticated Origin Pulls (mTLS) | 🔴 Pendente (aguarda provisionamento) |
+| R09 | Dependência com vulnerabilidade conhecida (supply chain) | A03 | Média | Médio–Alto | **Médio** | Dependabot semanal (pip/Docker/Actions) + `pip-audit` no CI a cada push | ✅ Implementado |
+| R10 | Perda de dados (corrupção/exclusão do SQLite, falha da VM Free Tier — sem SLA) | Continuidade | Média | Alto | **Alto** | Backup automatizado, criptografado, fora do servidor (ver `backup-recovery.md`) | 🔴 Pendente |
+| R11 | Perda de acesso administrativo (chave SSH perdida, conta de nuvem/GitHub/Cloudflare comprometida) | Continuidade | Baixa | Crítico | **Alto** | 2FA em todas as contas de infraestrutura (GitHub já ativo), cópia da chave SSH privada em local seguro (não só no notebook) | 🟡 Parcial — confirmar 2FA em Oracle Cloud e Cloudflare |
+| R12 | Exceção não tratada expõe detalhe interno (falha na chamada ao Turnstile ou ao SMTP) | A10 | Média | Médio | **Médio** | `DEBUG=False`, `try/except` ao redor de chamadas externas, página de erro genérica | 🔴 Pendente (aguarda implementação de Turnstile/e-mail) |
+
+## Plano de ação (5W2H)
+
+| # | O quê | Por quê | Onde | Quando | Quem | Como | Quanto custa |
+|---|---|---|---|---|---|---|---|
+| 1 | Bloqueio de força bruta no login | Mitigar R02 — login é o alvo mais óbvio de ataque automatizado | `apps/accounts/services.py`, `apps/accounts/views.py` | Concluído | Aluno (dev) | `LoginThrottleService` + `ThrottledLoginView`, testado via TDD | ~2h — feito |
+| 2 | Turnstile no login/cadastro + tela de 2FA com alerta por e-mail em código incorreto | Fechar R03; é o requisito funcional que diferencia o projeto | `apps/accounts/views.py`, `templates/accounts/` | Próxima sprint | Aluno (dev) | `TurnstileService` (chamada HTTP à API da Cloudflare) + `TwoFactorService` (verificação TOTP/e-mail via `pyotp`) + envio de e-mail via conta Gmail dedicada | ~4–6h, $0 (Turnstile e Gmail são gratuitos) |
+| 3 | CRUD de escrita de chamados com RBAC consistente | Fechar R04 por completo (hoje só a leitura está protegida) | `apps/tickets/views.py`, `apps/tickets/forms.py` | Próxima sprint | Aluno (dev) | `ModelForm` com validação + `role_required`/checagem em `TicketService` antes de qualquer `save()` | ~3h, $0 |
+| 4 | Hardening SSH + Fail2Ban na VM | Fechar R07 — é meta mínima obrigatória da disciplina | Instância Oracle Cloud | Ao provisionar a VM | Aluno (infra) | Seguir `docs/infra/ssh-hardening.md` | ~1h, $0 (Free Tier) |
+| 5 | UFW restrito a IPs Cloudflare + Authenticated Origin Pulls | Fechar R08 — sem isso, a Cloudflare/Turnstile podem ser contornados | VM + painel Cloudflare | Ao configurar DNS/proxy | Aluno (infra) | Seguir `docs/infra/cloudflare-setup.md` | ~1h, $0 |
+| 6 | Backup automatizado do `db.sqlite3`, criptografado, fora da VM | Fechar R10 — Free Tier não garante durabilidade do disco | Cron na VM + destino externo (ex.: bucket gratuito, ou e-mail cifrado para si mesmo) | Após deploy inicial | Aluno (infra) | Ver `docs/security/backup-recovery.md` | ~2h, $0 (dentro de free tiers) |
+| 7 | `pip-audit` no pipeline de CI | Reforçar R09 além do Dependabot (checa na hora do build, não só semanalmente) | `.github/workflows/security.yml` | Concluído | Aluno (dev) | Job `dependency-audit` novo, `pip-audit -r requirements.txt` | ~20min — feito |
+| 8 | Páginas de erro customizadas (404/500) + `try/except` nas integrações externas | Fechar R12, só faz sentido junto com o item 2 | `templates/errors/`, `apps/accounts/services.py` | Junto com o item 2 | Aluno (dev) | Templates simples sem stack trace + captura de `requests.RequestException`/`smtplib.SMTPException` | ~1h, $0 |
+| 9 | Confirmar 2FA ativo em todas as contas de infraestrutura (Oracle, Cloudflare, Gmail dedicado) | Fechar R11 | Contas externas (fora do código) | Antes do deploy final | Aluno (operação) | Ativar 2FA em cada painel | 15min, $0 |
+| 10 | Runbook de resposta a incidente | Sem isso, o restante da mitigação é só prevenção — falta o "e se acontecer mesmo assim" | `docs/security/incident-response.md` | Concluído | Aluno (dev) | Ver documento | Feito |
+
+## Como isso se conecta com o restante do repositório
+
+- Cada linha "Como" aponta para arquivo(s) específicos — quando implementado, o código deve
+  citar de volta o risco (`R0X`) em comentário ou na ADR correspondente, mantendo rastreabilidade.
+- Itens marcados 🔴/🟡 viram TODO explícito em `CLAUDE.md` para o agente de IA não perder de vista.
+- `docs/security/owasp-mitigations.md` mantém o recorte específico exigido pela disciplina
+  (mínimo 3 categorias); esta matriz é o quadro completo por trás dessa escolha.

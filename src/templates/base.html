@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Central de Chamados{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+    {% if messages %}
+        <div class="max-w-3xl mx-auto mt-4 space-y-2">
+            {% for message in messages %}
+                <div class="rounded-md px-4 py-2 text-sm {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <main class="max-w-5xl mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

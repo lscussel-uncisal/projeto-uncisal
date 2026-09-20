@@ -1,0 +1,52 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check src
+
+      - name: Testes (pytest)
+        run: pytest --cov=src --cov-report=term-missing
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Requer os secrets abaixo configurados em Settings > Secrets and variables > Actions:
+      #   SERVER_HOST        - IP publico da instancia Oracle Cloud
+      #   SERVER_USER         - usuario SSH nao-root
+      #   SERVER_SSH_KEY      - chave privada SSH (par dedicado para deploy)
+      #   ENV_FILE            - conteudo do .env de producao
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/helpdesk
+            git pull origin main
+            echo "${{ secrets.ENV_FILE }}" > .env
+            docker compose -f docker/docker-compose.yml up -d --build
