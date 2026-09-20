@@ -15,6 +15,7 @@ imagem (`ubuntu` no Ubuntu, `debian` no Debian).
 - [x] `PermitRootLogin no`
 - [x] UFW: `deny incoming` por padrão, liberando apenas 22, 80 e 443
 - [x] Fail2Ban: `jail.local` para `sshd`, `maxretry = 4`, `bantime = 24h` — já baniu 1 IP em minutos
+- [x] Jail `recidive` (reincidência) habilitado: 3 bans/dia → 1 semana banido em todas as portas
 - [x] Atualizações automáticas de segurança (`unattended-upgrades`) habilitadas
 
 ## 1. Criar usuário de administração dedicado
@@ -102,6 +103,32 @@ sudo fail2ban-client status sshd
 
 `maxretry = 4` + `bantime = 24h`: exatamente a meta mínima da disciplina. `findtime = 10m` define
 a janela em que essas 4 tentativas precisam ocorrer para contar como ataque.
+
+### Jail reincidente (`recidive`) — escalonamento além do mínimo
+
+O pacote do Fail2Ban já traz um jail pronto para reincidência, só não vem habilitado por padrão.
+Um IP que é banido repetidamente (por qualquer jail) leva um ban muito mais longo, em todas as
+portas, não só a que ele atacou:
+
+```bash
+sudo tee -a /etc/fail2ban/jail.local > /dev/null <<'EOF'
+
+[recidive]
+enabled = true
+logpath = /var/log/fail2ban.log
+banaction = %(banaction_allports)s
+bantime = 1w
+findtime = 1d
+maxretry = 3
+EOF
+
+sudo systemctl restart fail2ban
+sudo fail2ban-client status recidive
+```
+
+3 bans em 1 dia → 1 semana banido em todas as portas. Não usamos blocklist externa de bots
+conhecidos (tipo Spamhaus) de propósito — a Cloudflare, na frente das portas 80/443, já cobre isso
+com inteligência de ameaça mais atualizada do que qualquer lista estática configurada aqui.
 
 ## 5. Atualizações automáticas de segurança
 
