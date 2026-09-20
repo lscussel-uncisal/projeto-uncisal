@@ -30,7 +30,8 @@
 - [ ] UFW no servidor restrito aos ranges de IP da Cloudflare em 80/443 (hoje esta aberto pra
       qualquer origem nessas portas — ver `docs/infra/ssh-hardening.md`)
 - [ ] Nginx configurado para restaurar o IP real do visitante (`CF-Connecting-IP`)
-- [ ] Cloudflare Turnstile criado (site key + secret key) e integrado no formulario de login
+- [x] Cloudflare Turnstile criado (widget `central-chamados-uncisal`, hostnames
+      `uncisal.lserpsistemas.com.br` + `localhost`) e integrado no formulario de login
 - [ ] Teste publico executado (Qualys SSL Labs — nota A + suporte a PQC)
 
 ## Registros de DNS existentes (nao mexer)
@@ -100,5 +101,6 @@ Ver [`docs/security/nao-commitar.md`](../security/nao-commitar.md): a `SITE_KEY`
 4. Habilitar HSTS na Cloudflare.
 5. Restringir UFW/Security List aos ranges de IP da Cloudflare em 80/443 + Authenticated Origin
    Pulls (mTLS).
-6. Criar o Turnstile e integrar no login/cadastro.
+6. ~~Criar o Turnstile e integrar no login/cadastro.~~ Feito — falta so integrar no cadastro
+   quando essa tela existir.
 7. Rodar o teste do Qualys SSL Labs.

@@ -387,3 +387,35 @@ considerar concluido. Detalhes e comandos de verificacao em `docs/infra/cloudfla
 **Consequencias:** protecao contra spoofing de DNS, sem custo. Unico cuidado permanente: qualquer
 mudanca futura nos nameservers/chaves da zona precisa manter o DS record sincronizado no
 Registro.br, senao a validacao DNSSEC passa a falhar (o oposto do problema que ele resolve).
+
+---
+
+## ADR-020 — Turnstile integrado: verificacao antes das credenciais, falha fechado
+
+**Contexto:** widget Turnstile criado na Cloudflare (`central-chamados-uncisal`, hostnames
+`uncisal.lserpsistemas.com.br` + `localhost` para dev). Faltava a integracao real no codigo.
+
+**Decisao:**
+- `TurnstileService.verify()` (`apps/accounts/services.py`) chama a API `siteverify` da
+  Cloudflare; qualquer falha de rede e capturada e loga o erro sem expor detalhe ao visitante,
+  retornando `False` (falha fechado — nega acesso em vez de deixar passar quando a Cloudflare
+  esta indisponivel).
+- `TurnstileAuthenticationForm` (`apps/accounts/forms.py`) verifica o Turnstile **antes** de
+  chamar `super().clean()` (autenticacao) — bots sao barrados sem gastar um `authenticate()`, e
+  a resposta nao revela se a senha estaria certa.
+- So verifica de fato quando `settings.TURNSTILE_ENABLED` (ADR-009) — em dev sem chave, o form se
+  comporta como um `AuthenticationForm` normal.
+- Testado com mocks (`unittest.mock.patch` em `TurnstileService.verify`) nos testes automatizados,
+  e validado manualmente no navegador com o widget real (site key de producao, hostname
+  `localhost` autorizado para isso).
+
+**Bug real encontrado e corrigido durante a validacao:** a site key foi transcrita a mao a partir
+de um screenshot ampliado (zoom) e ganhou um "A" a mais por engano
+(`0x4AAAAAAAE...` em vez de `0x4AAAAAAE...`), causando `TurnstileError 400020` (sitekey invalida)
+no navegador. Corrigido lendo o valor certo direto da URL do widget no painel da Cloudflare (nunca
+mais transcrito a mao). Registrado como regra permanente em `CLAUDE.md`: segredos/valores longos
+sempre copiados pela propria UI, nunca digitados de memoria a partir de uma imagem.
+
+**Consequencias:** primeira camada de defesa contra automacao no login funcionando de ponta a
+ponta; ainda falta a parede de 2FA (proximo item do plano 5W2H em `risk-matrix.md`) e a mesma
+integracao na tela de cadastro, quando ela existir.

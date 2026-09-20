@@ -1,23 +1,26 @@
+from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.core.exceptions import PermissionDenied
 
+from apps.accounts.forms import TurnstileAuthenticationForm
 from apps.accounts.models import LoginAttempt
-from apps.accounts.services import LoginThrottleService
-
-
-def client_ip(request) -> str | None:
-    """IP real do visitante. Atras da Cloudflare, o Nginx repassa isto no header abaixo
-    (ver docker/nginx/helpdesk.conf); sem Cloudflare (dev local), cai no IP da conexao."""
-    return request.META.get("HTTP_CF_CONNECTING_IP") or request.META.get("REMOTE_ADDR")
+from apps.accounts.services import LoginThrottleService, client_ip
 
 
 class ThrottledLoginView(auth_views.LoginView):
-    """LoginView padrao do Django + auditoria e bloqueio temporario por forca bruta.
+    """LoginView padrao do Django + auditoria, bloqueio por forca bruta e Cloudflare Turnstile.
 
-    TODO(proxima etapa): Cloudflare Turnstile no form + parede de 2FA apos a senha.
+    TODO(proxima etapa): parede de 2FA (TOTP/e-mail) apos a senha.
     """
 
     template_name = "accounts/login.html"
+    form_class = TurnstileAuthenticationForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["turnstile_enabled"] = settings.TURNSTILE_ENABLED
+        context["turnstile_site_key"] = settings.TURNSTILE_SITE_KEY
+        return context
 
     def dispatch(self, request, *args, **kwargs):
         if request.method == "POST":

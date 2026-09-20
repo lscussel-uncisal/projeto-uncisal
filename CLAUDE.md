@@ -54,6 +54,10 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
   detect-private-key). Se um hook falhar, corrigir a causa.
 - **Nunca** fazer `git push --force`, `git reset --hard` ou apagar branches sem confirmação
   explícita do usuário nesta conversa.
+- **Nunca** transcrever à mão um valor sensível/longo (chave, digest, secret) lido de screenshot
+  ou zoom — já causou um bug real (um "A" a mais na Turnstile site key, widget quebrado com erro
+  400020). Preferir: copiar direto do botão de copiar da própria UI, ler da URL quando aparecer
+  lá, ou pedir pro usuário colar. Zoom/OCR visual é o último recurso, nunca a fonte de verdade.
 
 ## Sempre fazer
 
