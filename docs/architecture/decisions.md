@@ -264,3 +264,22 @@ para o agente de IA nao inventar um formato proprio.
 **Consequencias:** o tipo do commit (`feat`, `fix`, `docs`, `build`, `chore`, etc.) fica visivel
 sem abrir o diff; combina com as ADRs deste arquivo — a ADR explica o *porque*, o commit que a
 implementa explica o *o que mudou*, no mesmo vocabulario.
+
+---
+
+## ADR-015 — Instancia Oracle Cloud: Ampere A1 (ARM), Dockerfile multi-arquitetura
+
+**Contexto:** ao escrever o manual de provisionamento (`docs/infra/oracle-cloud-setup.md`), duas
+shapes Always Free estavam disponiveis: `VM.Standard.E2.1.Micro` (AMD/x86, 1 OCPU, 1 GB RAM) ou
+`VM.Standard.A1.Flex` (Ampere/ARM, ate 4 OCPUs e 24 GB RAM no total da conta).
+
+**Decisao:** recomendar Ampere A1 — mesma gratuidade, recursos muito maiores. Isso exigiu tornar
+o `docker/Dockerfile` consciente de arquitetura: o stage `css-builder` baixava o binario do
+Tailwind CLI fixo para `linux-x64`, o que quebraria numa VM ARM. Corrigido com `ARG TARGETARCH`
+(preenchido automaticamente pelo BuildKit) selecionando `x64` ou `arm64` conforme a plataforma de
+build. `docker/entrypoint.sh` tambem ganhou `GUNICORN_WORKERS` configuravel via `.env` (default 3),
+ja que o numero ideal de workers difere bastante entre 1 GB e 24 GB de RAM disponiveis.
+
+**Consequencias:** a imagem builda corretamente em qualquer uma das duas shapes Always Free (ou
+localmente, em Windows/Mac com Apple Silicon) sem exigir nenhuma configuracao manual adicional —
+validado reconstruindo a imagem localmente apos a mudanca (amd64) sem regressao.
