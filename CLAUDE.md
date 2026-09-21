@@ -54,6 +54,10 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
   detect-private-key). Se um hook falhar, corrigir a causa.
 - **Nunca** fazer `git push --force`, `git reset --hard` ou apagar branches sem confirmação
   explícita do usuário nesta conversa.
+- **Nunca** transcrever à mão um valor sensível/longo (chave, digest, secret) lido de screenshot
+  ou zoom — já causou um bug real (um "A" a mais na Turnstile site key, widget quebrado com erro
+  400020). Preferir: copiar direto do botão de copiar da própria UI, ler da URL quando aparecer
+  lá, ou pedir pro usuário colar. Zoom/OCR visual é o último recurso, nunca a fonte de verdade.
 
 ## Sempre fazer
 
@@ -73,6 +77,11 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
   alteração.
 - Escrever toda mensagem de commit em **inglês**, seguindo Conventional Commits — ver
   `CONTRIBUTING.md`. O resto da documentação fica em português; o histórico de commits, não.
+- Depois de dar `git push`, checar se o CI ficou verde antes de empilhar mais trabalho em cima —
+  `pytest` passar localmente não é garantia (ver ADR-021: 8 commits seguidos com CI quebrado por
+  causa de um `collectstatic` que só tinha rodado localmente, nunca detectado a tempo). Checar via
+  `https://github.com/lscussel-uncisal/projeto-uncisal/actions` ou pela API
+  (`git credential fill` + `curl` na API do GitHub — não precisa pedir nada novo ao usuário).
 
 ## Contexto do projeto
 

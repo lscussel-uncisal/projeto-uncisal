@@ -264,3 +264,192 @@ para o agente de IA nao inventar um formato proprio.
 **Consequencias:** o tipo do commit (`feat`, `fix`, `docs`, `build`, `chore`, etc.) fica visivel
 sem abrir o diff; combina com as ADRs deste arquivo — a ADR explica o *porque*, o commit que a
 implementa explica o *o que mudou*, no mesmo vocabulario.
+
+---
+
+## ADR-015 — Instancia Oracle Cloud: Ampere A1 (ARM), Dockerfile multi-arquitetura
+
+**Contexto:** ao escrever o manual de provisionamento (`docs/infra/oracle-cloud-setup.md`), duas
+shapes Always Free estavam disponiveis: `VM.Standard.E2.1.Micro` (AMD/x86, 1 OCPU, 1 GB RAM) ou
+`VM.Standard.A1.Flex` (Ampere/ARM, ate 4 OCPUs e 24 GB RAM no total da conta).
+
+**Decisao:** recomendar Ampere A1 — mesma gratuidade, recursos muito maiores. Isso exigiu tornar
+o `docker/Dockerfile` consciente de arquitetura: o stage `css-builder` baixava o binario do
+Tailwind CLI fixo para `linux-x64`, o que quebraria numa VM ARM. Corrigido com `ARG TARGETARCH`
+(preenchido automaticamente pelo BuildKit) selecionando `x64` ou `arm64` conforme a plataforma de
+build. `docker/entrypoint.sh` tambem ganhou `GUNICORN_WORKERS` configuravel via `.env` (default 3),
+ja que o numero ideal de workers difere bastante entre 1 GB e 24 GB de RAM disponiveis.
+
+**Consequencias:** a imagem builda corretamente em qualquer uma das duas shapes Always Free (ou
+localmente, em Windows/Mac com Apple Silicon) sem exigir nenhuma configuracao manual adicional —
+validado reconstruindo a imagem localmente apos a mudanca (amd64) sem regressao.
+
+---
+
+## ADR-016 — Provisionamento real da instancia: fallback para AMD, chave de deploy dedicada
+
+**Contexto:** execucao real do provisionamento (`docs/infra/oracle-cloud-setup.md`) em `sa-saopaulo-1`.
+
+**Decisoes tomadas durante a execucao:**
+1. **Shape:** Ampere A1 e AMD Micro deram "out of host capacity" na primeira tentativa (comum em
+   regioes pequenas, 1 unico availability domain). AMD Micro liberou pouco depois — instancia
+   criada com `VM.Standard.E2.1.Micro` (1 OCPU / 1 GB), nao a A1 originalmente recomendada.
+   `GUNICORN_WORKERS` (ADR-015) permanece util aqui, com um valor mais conservador em producao.
+2. **IP publico:** o toggle "Automatically assign public IPv4 address" do wizard simplificado nao
+   funcionou ao criar VCN/subnet novas inline — instancia nasceu sem IP publico e sem Internet
+   Gateway. Corrigido depois de criada, sem recriar a instancia: Quick Action "Connect public
+   subnet to internet" (cria o IG) + `VNIC > IP administration > Edit > Public IP type: Reserved
+   public IP > Create new Reserved IP Address`.
+3. **Chave SSH de deploy:** a chave pessoal (`uncisal_oracle`) foi gerada com passphrase (boa
+   pratica — protege a chave no disco do aluno). Isso impede uso em automacao nao-interativa (o
+   agente de IA nao digita passphrase, por regra). Solucao: gerar a chave de deploy
+   (`uncisal_deploy`, ed25519, **sem** passphrase) planejada desde ADR-005 para o GitHub Actions,
+   e usa-la tambem para a configuracao inicial do servidor via SSH automatizado — evita criar uma
+   terceira chave descartavel. O aluno autorizou a chave de deploy no servidor com um unico comando
+   interativo (usando a chave pessoal, digitando a passphrase so essa vez).
+4. **Usuario `deploy`:** criado sem sudo sem senha — nao precisa, so roda `git pull`/`docker
+   compose`, e faz isso pertencendo ao grupo `docker` (nao root). Toda configuracao de root
+   (UFW, Fail2Ban, sshd, instalacao de pacotes) foi feita com o usuario `ubuntu` (sudo sem senha
+   por padrao da imagem), nunca com `deploy`.
+
+**Consequencias:** hardening completo (SSH, UFW, Fail2Ban, unattended-upgrades, Docker, Nginx,
+Certbot 5.8.0) validado end-to-end via SSH automatizado, com verificacao em cada etapa antes de
+prosseguir para a proxima (nunca fechar uma porta sem confirmar que a nova primeiro abre). Fail2Ban
+ja baniu um IP minutos depois do endereco publico existir — evidencia direta de R07/R02 em
+`docs/security/risk-matrix.md` deixarem de ser risco teorico.
+
+---
+
+## ADR-017 — Fail2Ban: jails extras (recidive + Nginx), sem blocklist externa
+
+**Contexto:** o jail `sshd` minimo (ADR/checklist da disciplina) so enxerga ataques na porta 22.
+Perguntado explicitamente se valia reforcar ("modo agressivo", "bot ja reconhecido").
+
+**Decisao:** habilitar dois grupos de jails que ja vem no pacote `fail2ban`, so nao habilitados por
+padrao:
+- `recidive`: le o proprio log do Fail2Ban: um IP banido 3x por qualquer jail em 24h leva ban de
+  1 semana em **todas** as portas (`banaction_allports`), nao so a que ele atacou.
+- `nginx-http-auth`, `nginx-botsearch`, `nginx-bad-request`: cobrem as portas 80/443 (scanners de
+  vulnerabilidade conhecida, requisicoes malformadas) — antes disso, trafego malicioso em 80/443
+  nao gerava ban nenhum.
+
+Deliberadamente **sem** blocklist externa de bots conhecidos (tipo Spamhaus/blocklist.de): a
+aplicacao ja vai ficar atras da Cloudflare em 80/443, cuja inteligencia de ameaca e mais atualizada
+que qualquer lista estatica mantida aqui — duplicar isso so adicionaria complexidade sem ganho real.
+
+**Consequencias:** cobertura de Fail2Ban passa de "so SSH" para "SSH + HTTP/HTTPS + escalonamento
+para reincidentes", sem introduzir dependencia externa. `nginx-limit-req` ficou de fora por exigir
+zonas de rate limiting no Nginx que ainda nao existem (vhost real da aplicacao ainda nao publicado).
+
+---
+
+## ADR-018 — Cloudflare: ajustes de seguranca gratuitos aplicados antes do TLS estar pronto
+
+**Contexto:** ao criar o registro `A` de `uncisal.lserpsistemas.com.br` (proxy ativado), revisamos
+tambem as configuracoes de seguranca do plano Free da Cloudflare.
+
+**Decisoes:**
+- **Bot Fight Mode**: habilitado (estava desligado por padrao).
+- **Minimum TLS Version**: `1.0` (default, inseguro) → `1.2`.
+- **Registros DNS pre-existentes** (MX nulo, SPF `-all`, DMARC `p=reject`) mantidos — ja travam o
+  dominio contra spoofing de e-mail, nao foram tocados.
+- **NAO** subimos o modo SSL/TLS para `Full (strict)` nem habilitamos HSTS na Cloudflare ainda —
+  os dois dependem da origem ter um certificado TLS valido e funcionando primeiro (Certbot, ainda
+  nao rodado com o vhost real). Fazer isso antes da hora arrisca a origem responder erro em toda
+  requisicao HTTPS (`Full strict`) ou travar acesso via HTTP em caso de falha temporaria (`HSTS`
+  com cache longo no navegador do visitante). Ordem completa registrada em
+  `docs/infra/cloudflare-setup.md` → "Proximos passos".
+- **Security Level**: nada a fazer — a Cloudflare descontinuou o controle manual, "always
+  protected" e automatico agora.
+- **Cloudflare Managed Ruleset, Browser Integrity Check, Email Address Obfuscation**: confirmados
+  ja ativos por padrao no plano Free, nenhuma acao necessaria.
+
+**Consequencias:** ganho de seguranca imediato sem nenhum risco de indisponibilidade; os itens que
+dependem do certificado de origem ficam explicitamente sequenciados, evitando a tentacao de
+habilitar tudo de uma vez e quebrar o acesso no meio da configuracao do servidor.
+
+---
+
+## ADR-019 — DNSSEC habilitado (assinatura criptografica das respostas DNS)
+
+**Contexto:** sem DNSSEC, nada impede um atacante em posicao de rede privilegiada de forjar
+respostas DNS pra `lserpsistemas.com.br` e redirecionar visitantes pra um servidor falso — o
+HTTPS nem entraria em jogo, porque o navegador nunca chegaria no site real.
+
+**Decisao:** habilitado na Cloudflare, com o DS record publicado no Registro.br (a cadeia de
+confianca do DNSSEC exige isso no registrador pai da zona). Os valores do DS record (Key Tag,
+Algorithm, Digest) foram copiados diretamente da tela da Cloudflare via clique — nunca
+transcritos a mao — porque um DS record incorreto quebraria a resolucao do dominio inteiro para
+qualquer resolver que valide DNSSEC (1.1.1.1, 8.8.8.8, e a maioria dos resolvers publicos).
+Verificacao pos-mudanca feita duas vezes (painel da Cloudflare + consulta DNS publica) antes de
+considerar concluido. Detalhes e comandos de verificacao em `docs/infra/cloudflare-setup.md`.
+
+**Consequencias:** protecao contra spoofing de DNS, sem custo. Unico cuidado permanente: qualquer
+mudanca futura nos nameservers/chaves da zona precisa manter o DS record sincronizado no
+Registro.br, senao a validacao DNSSEC passa a falhar (o oposto do problema que ele resolve).
+
+---
+
+## ADR-020 — Turnstile integrado: verificacao antes das credenciais, falha fechado
+
+**Contexto:** widget Turnstile criado na Cloudflare (`central-chamados-uncisal`, hostnames
+`uncisal.lserpsistemas.com.br` + `localhost` para dev). Faltava a integracao real no codigo.
+
+**Decisao:**
+- `TurnstileService.verify()` (`apps/accounts/services.py`) chama a API `siteverify` da
+  Cloudflare; qualquer falha de rede e capturada e loga o erro sem expor detalhe ao visitante,
+  retornando `False` (falha fechado — nega acesso em vez de deixar passar quando a Cloudflare
+  esta indisponivel).
+- `TurnstileAuthenticationForm` (`apps/accounts/forms.py`) verifica o Turnstile **antes** de
+  chamar `super().clean()` (autenticacao) — bots sao barrados sem gastar um `authenticate()`, e
+  a resposta nao revela se a senha estaria certa.
+- So verifica de fato quando `settings.TURNSTILE_ENABLED` (ADR-009) — em dev sem chave, o form se
+  comporta como um `AuthenticationForm` normal.
+- Testado com mocks (`unittest.mock.patch` em `TurnstileService.verify`) nos testes automatizados,
+  e validado manualmente no navegador com o widget real (site key de producao, hostname
+  `localhost` autorizado para isso).
+
+**Bug real encontrado e corrigido durante a validacao:** a site key foi transcrita a mao a partir
+de um screenshot ampliado (zoom) e ganhou um "A" a mais por engano
+(`0x4AAAAAAAE...` em vez de `0x4AAAAAAE...`), causando `TurnstileError 400020` (sitekey invalida)
+no navegador. Corrigido lendo o valor certo direto da URL do widget no painel da Cloudflare (nunca
+mais transcrito a mao). Registrado como regra permanente em `CLAUDE.md`: segredos/valores longos
+sempre copiados pela propria UI, nunca digitados de memoria a partir de uma imagem.
+
+**Consequencias:** primeira camada de defesa contra automacao no login funcionando de ponta a
+ponta; ainda falta a parede de 2FA (proximo item do plano 5W2H em `risk-matrix.md`) e a mesma
+integracao na tela de cadastro, quando ela existir.
+
+---
+
+## ADR-021 — CI quebrado desde o primeiro commit: manifest de staticfiles nos testes
+
+**Contexto:** o pipeline "CI/CD" (job `test`) estava falhando em **todo** commit desde o commit
+inicial (57efb28) — 8 runs seguidos, nunca detectado porque os testes sempre passavam localmente.
+Descoberto so quando o usuario notou os e-mails de falha do GitHub Actions acumulados na caixa de
+entrada (a "Security scan", workflow separado, sempre passou — por isso nao foi um alarme obvio).
+
+**Causa raiz:** `STORAGES["staticfiles"]` em `config/settings/base.py` usa
+`CompressedManifestStaticFilesStorage` — essa storage so funciona depois de `collectstatic` gerar
+o arquivo `staticfiles.json` (mapa hash→arquivo). `config/settings/test.py` herdava esse valor de
+`base.py` sem override. Qualquer teste que renderiza um template com `{% static %}` (paginas de
+erro 404/500, `login.html`) falhava com `ValueError: Missing staticfiles manifest entry`. Nunca
+aparecia localmente porque o `src/staticfiles/` de rodadas anteriores de `collectstatic` (feitas
+manualmente durante o desenvolvimento) ficava no disco — mascarando o problema. O CI, partindo de
+um checkout limpo a cada run, sempre bateu nisso.
+
+**Como foi diagnosticado:** os logs completos do job nao ficam visiveis sem login no GitHub; em vez
+de pedir pro usuario copiar e colar, foi feita uma chamada autenticada a API do GitHub reaproveitando
+a credencial que o proprio `git` ja usa localmente (`git credential fill`, sem pedir nada novo, sem
+expor o token em nenhum output). Reproduzido localmente escondendo `src/staticfiles/` antes de
+rodar `pytest` numa venv limpa — confirmou o mesmo erro, validando o diagnostico antes de corrigir.
+
+**Decisao:** `config/settings/test.py` agora define seu proprio `STORAGES`, usando
+`StaticFilesStorage` (sem manifest) — testes nunca devem depender de um passo de build (`collectstatic`)
+ja ter rodado antes.
+
+**Consequencias:** 8 commits consecutivos no historico do `main` tem CI vermelho — nao da pra
+reescrever isso sem forcar o historico (nao fazemos isso sem pedido explicito). A partir deste
+commit, `main` volta a ficar verde. **Licao gravada em `CLAUDE.md`**: nunca considerar uma tarefa
+"concluida" so porque `pytest` passou localmente — falta ainda checar se o commit anterior ficou
+verde no CI antes de empilhar mais trabalho em cima.
