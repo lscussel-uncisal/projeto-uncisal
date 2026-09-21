@@ -496,3 +496,42 @@ as dependencias, ou espacar os merges o suficiente pro deploy anterior terminar 
 comecar). Nao ha trava de concorrencia no job `deploy` do `deploy.yml` hoje; adicionar
 `concurrency: { group: deploy, cancel-in-progress: false }` no workflow e uma melhoria futura
 razoavel para eliminar esse risco estruturalmente, em vez de depender de disciplina manual.
+
+## ADR-024 — Parede de 2FA: opt-in por usuario, sessao para o codigo de e-mail, dois fluxos separados
+
+**Contexto:** o projeto exigia 2FA (TOTP + e-mail) com um alerta especifico — codigo incorreto
+dispara um e-mail avisando que a senha pode estar comprometida. Faltava decidir: (1) 2FA
+obrigatorio ou opcional, (2) onde guardar o codigo de e-mail (de vida curta, uso unico) sem criar
+um model novo so pra isso, e (3) como o auto-cadastro (usuarios sao provisionados so pelo admin,
+nao ha tela de registro) gera e confirma o segredo TOTP.
+
+**Decisoes:**
+
+1. **2FA fica opcional por usuario** (`User.is_two_factor_enabled`), decisao explicita do usuario
+   nesta conversa — o ideal seria obrigatorio, mas em vez de forcar tecnicamente, o `help_text` do
+   campo no Django Admin explica o risco real (senha vazada/reaproveitada = conta tomada) de forma
+   concreta, nao generica. Fica registrado como decisao deliberada, nao como lacuna.
+2. **Codigo de e-mail (login e cadastro) vive na sessao** (`request.session`, backend padrao do
+   Django — banco de dados, compartilhado entre os workers do Gunicorn), nunca em um model novo:
+   e efemero (expira em `TwoFactorService.EMAIL_CODE_TTL`, 10 min) e de uso unico, um registro
+   persistente seria over-engineering. Guardado como hash SHA-256 (`TwoFactorService.hash_code`),
+   nunca em texto puro, e comparado com `secrets.compare_digest` (evita timing attack).
+3. **Dois fluxos deliberadamente separados**: `ThrottledLoginView`/`TwoFactorVerifyView` (login,
+   usa `LoginThrottleService` — o mesmo throttle que ja contava `INVALID_2FA` desde o inicio, so
+   faltava a tela chamar) vs. `TwoFactorSetupView`/`TwoFactorConfirmSetupView` (auto-cadastro,
+   usuario ja autenticado, **sem** throttle de login — usar o mesmo throttle ali bloquearia o
+   LOGIN do usuario por causa de erros ao configurar o proprio 2FA, um efeito colateral errado).
+4. **QR code gerado como data URI embutido no HTML** (`TwoFactorService.qr_code_data_uri`, base64
+   PNG), sem view/endpoint dedicado — o QR so aparece uma vez, na tela de confirmacao, nao precisa
+   ser cacheado nem linkado separadamente.
+5. **Envio de e-mail nunca deixa excecao subir** (`send_email_code` retorna `bool`, `False` em
+   falha de SMTP): login/cadastro por e-mail mostra erro pro usuario ("tente novamente") em vez de
+   fingir que o codigo foi enviado ou estourar um 500 — fecha a lacuna que `owasp-mitigations.md`
+   ja sinalizava como pendente (A10).
+
+**Consequencias:** `SESSION_2FA_*` (login pendente) e `SESSION_2FA_SETUP_*` (cadastro) usam
+namespaces de chave de sessao separados de proposito, para nunca colidir se os dois fluxos
+estiverem em andamento no mesmo navegador ao mesmo tempo (pouco provavel, mas gratuito de evitar).
+Testado via TDD: `apps/accounts/tests/test_two_factor_service.py`,
+`test_views.py::TestTwoFactorVerifyView`, `test_two_factor_setup_views.py` — cobre TOTP e e-mail,
+codigo certo/errado, throttle, e falha de SMTP em ambos os fluxos.

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Confirmar 2FA · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto mt-16 bg-white shadow rounded-lg p-6">
+    <h1 class="text-xl font-semibold mb-4">Confirmar segundo fator</h1>
+
+    {% if method == "totp" %}
+        <p class="text-sm text-slate-600 mb-3">
+            Escaneie este QR code com seu aplicativo autenticador (Google Authenticator, Authy,
+            etc.) e digite o código de 6 dígitos que ele mostrar.
+        </p>
+        <img src="{{ qr_code_data_uri }}" alt="QR code de configuração do 2FA" class="mx-auto mb-4">
+    {% else %}
+        <p class="text-sm text-slate-600 mb-4">
+            Enviamos um código de 6 dígitos para o seu e-mail. Digite abaixo para confirmar.
+        </p>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="w-full mt-4 rounded-md bg-slate-900 text-white py-2">
+            Confirmar
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -11,7 +11,6 @@
 <div class="max-w-sm mx-auto mt-16 bg-white shadow rounded-lg p-6">
     <h1 class="text-xl font-semibold mb-4">Entrar</h1>
 
-    {# TODO(proxima etapa): parede de segundo fator (TOTP/e-mail) apos a senha. #}
     <form method="post">
         {% csrf_token %}
         {{ form.as_p }}

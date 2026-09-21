@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Verificação em duas etapas · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto mt-16 bg-white shadow rounded-lg p-6">
+    <h1 class="text-xl font-semibold mb-2">Verificação em duas etapas</h1>
+    {% if method == "email" %}
+        <p class="text-sm text-slate-600 mb-4">
+            Enviamos um código de 6 dígitos para o seu e-mail. Ele expira em alguns minutos.
+        </p>
+    {% else %}
+        <p class="text-sm text-slate-600 mb-4">
+            Digite o código de 6 dígitos do seu aplicativo autenticador.
+        </p>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="w-full mt-4 rounded-md bg-slate-900 text-white py-2">
+            Verificar
+        </button>
+    </form>
+</div>
+{% endblock %}

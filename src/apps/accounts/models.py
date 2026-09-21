@@ -15,7 +15,15 @@ class User(AbstractUser):
     """Usuário customizado: adiciona papel (RBAC) e flag de 2FA ao modelo padrão do Django."""
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.USER)
-    is_two_factor_enabled = models.BooleanField(default=False)
+    is_two_factor_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Sem 2FA, uma senha vazada ou reaproveitada de outro site já é suficiente para "
+            "tomar esta conta — não é um risco hipotético, é o vetor de invasão mais comum. "
+            "Esta flag só reflete se o usuário terminou a configuração; ative em "
+            "'Segurança da conta' após o primeiro login (aplicativo autenticador ou e-mail)."
+        ),
+    )
 
     @property
     def is_admin_role(self) -> bool:

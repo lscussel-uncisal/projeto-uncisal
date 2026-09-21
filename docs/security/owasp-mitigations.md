@@ -27,7 +27,7 @@
 | **A05 — Injection** | Zero (decorrência do stack) | Django ORM elimina SQL injection por padrão (sem `raw()`/string interpolation); autoescape de template elimina XSS refletido (sem `\|safe` em input de usuário). Só precisa documentar a prática, nenhum código novo. |
 | **A04 — Cryptographic Failures** | Baixo (~15 min) | Trocar hasher padrão por Argon2id (`pip install argon2-cffi`, 1a posição em `PASSWORD_HASHERS`); `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`/HSTS já estão em `prod.py`. |
 | **A02 — Security Misconfiguration** | Baixo (já em boa parte construído) | `DEBUG=False`, headers de segurança e `SECRET_KEY` fail-fast já em `prod.py`; falta só documentar. |
-| **A07 — Authentication Failures** | Médio (núcleo do projeto) | 2FA (TOTP/e-mail) + Turnstile já são requisito funcional do projeto — mas só fica completo com *rate limiting* no login e na verificação de 2FA (sem isso, o código de 6 dígitos é atacável por força bruta). Vale o custo por ser o coração da aplicação. |
+| **A07 — Authentication Failures** | Concluído | 2FA (TOTP/e-mail, `TwoFactorService`) + Turnstile + *rate limiting* no login e na verificação de 2FA (`LoginThrottleService`, cobre `INVALID_CREDENTIALS` e `INVALID_2FA` pelo mesmo mecanismo) — sem isso, o código de 6 dígitos seria atacável por força bruta. É o coração da aplicação. |
 | **A10 — Mishandling of Exceptional Conditions** | Médio | Páginas customizadas de erro (404/500, sem stack trace) + `try/except` ao redor das chamadas externas (verificação do Turnstile, envio de e-mail via SMTP) para não vazar detalhe interno em caso de falha de rede/API. |
 | A03 — Software Supply Chain Failures | Baixo, mas cosmético | Já coberto por `.github/dependabot.yml`. Poderia render mais com `pip-audit` no CI, mas o ganho de narrativa é menor que os itens acima. |
 | A06 — Insecure Design | Alto para o retorno | Sobrepõe muito com A01 na prática; documentar como categoria separada exigiria uma narrativa de design mais abstrata sem código novo claramente associado. |
@@ -50,8 +50,12 @@ segurança.
 - [x] Páginas de erro customizadas (403/404/500), sem stack trace
 - [x] Cloudflare Turnstile integrado no login (`TurnstileService`, `TurnstileAuthenticationForm`),
       com `try/except` ao redor da chamada HTTP (falha fechado, nunca expõe o motivo real)
-- [ ] Rate limiting específico na etapa de verificação do código 2FA (quando a tela existir)
-- [ ] `try/except` ao redor do envio de e-mail (quando implementado)
+- [x] Parede de 2FA (TOTP + e-mail) com alerta por e-mail em código incorreto
+      (`TwoFactorService`, `ThrottledLoginView`/`TwoFactorVerifyView`)
+- [x] Rate limiting específico na etapa de verificação do código 2FA — reaproveita o mesmo
+      `LoginThrottleService` (já contava `INVALID_2FA`, só faltava a tela chamá-lo)
+- [x] `try/except` ao redor do envio de e-mail (`TwoFactorService.send_email_code`/
+      `send_wrong_code_alert`, falha fechado — nunca deixa a exceção virar 500)
 - [ ] Confirmar com o usuário o conjunto final (3 ou 5 categorias)
 - [ ] Apontar arquivo/linha exata de cada mitigação após a implementação
 - [ ] Copiar o resumo final para a tabela do `README.md`

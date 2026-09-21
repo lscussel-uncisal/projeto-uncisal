@@ -1,8 +1,15 @@
+import base64
+import hashlib
 import logging
+import secrets
 from datetime import timedelta
+from io import BytesIO
 
+import pyotp
+import qrcode
 import requests
 from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
 
 from apps.accounts.models import LoginAttempt, User
@@ -96,3 +103,98 @@ class LoginThrottleService:
                 return True
 
         return False
+
+
+class TwoFactorService:
+    """Segundo fator de autenticacao: TOTP (app autenticador) ou codigo por e-mail.
+
+    So sabe *como* gerar/verificar codigos e mandar e-mails — quem decide *quando* usar
+    cada metodo e a view (ver ThrottledLoginView/TwoFactorVerifyView).
+    """
+
+    EMAIL_CODE_LENGTH = 6
+    EMAIL_CODE_TTL = timedelta(minutes=10)
+
+    @classmethod
+    def generate_totp_secret(cls) -> str:
+        return pyotp.random_base32()
+
+    @classmethod
+    def provisioning_uri(cls, *, user: User, secret: str) -> str:
+        """URI otpauth:// para o QR code que o app autenticador escaneia."""
+        return pyotp.TOTP(secret).provisioning_uri(
+            name=user.email or user.get_username(), issuer_name=settings.OTP_ISSUER_NAME
+        )
+
+    @classmethod
+    def qr_code_data_uri(cls, uri: str) -> str:
+        """PNG do QR code do `provisioning_uri`, como data URI — sem precisar de uma
+        view/endpoint separado so pra servir a imagem (o QR nunca precisa ser cacheado
+        ou linkado, so aparece uma vez na tela de confirmacao do cadastro)."""
+        image = qrcode.make(uri)
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{encoded}"
+
+    @classmethod
+    def verify_totp(cls, *, secret: str, code: str) -> bool:
+        if not secret or not code:
+            return False
+        # valid_window=1 tolera 1 passo de 30s de diferenca de relogio entre servidor e app.
+        return pyotp.TOTP(secret).verify(code, valid_window=1)
+
+    @classmethod
+    def generate_email_code(cls) -> str:
+        return f"{secrets.randbelow(10**cls.EMAIL_CODE_LENGTH):0{cls.EMAIL_CODE_LENGTH}d}"
+
+    @classmethod
+    def hash_code(cls, code: str) -> str:
+        # Nao precisa ser um hash de senha (Argon2/bcrypt): o codigo e numerico, de vida
+        # curta (EMAIL_CODE_TTL) e de uso unico — SHA-256 so evita guardar o valor puro
+        # na sessao. Comparar sempre com secrets.compare_digest (ver TwoFactorVerifyView).
+        return hashlib.sha256(code.encode()).hexdigest()
+
+    @classmethod
+    def send_email_code(cls, *, user: User, code: str) -> bool:
+        """True se o e-mail foi enviado. False em falha do SMTP — quem chama decide o que
+        fazer (ex.: nao redirecionar pra uma tela de "codigo enviado" que seria mentira).
+        Nunca deixa a excecao subir: um SMTP fora do ar nao pode virar erro 500/stack trace
+        pro usuario (ver docs/security/owasp-mitigations.md, A10)."""
+        minutes = int(cls.EMAIL_CODE_TTL.total_seconds() // 60)
+        try:
+            send_mail(
+                subject=f"{settings.OTP_ISSUER_NAME} - Código de verificação",
+                message=(
+                    f"Seu código de verificação é: {code}\n\n"
+                    f"Ele expira em {minutes} minutos. Se você não tentou entrar na sua conta, "
+                    "ignore este e-mail."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+        except OSError:
+            logger.error("Falha ao enviar código de verificação por e-mail", exc_info=True)
+            return False
+        return True
+
+    @classmethod
+    def send_wrong_code_alert(cls, *, user: User) -> None:
+        # Melhor esforço: se o SMTP falhar aqui, o codigo errado ja foi rejeitado
+        # normalmente — um alerta que nao saiu nao pode virar erro 500 na resposta.
+        try:
+            send_mail(
+                subject=f"{settings.OTP_ISSUER_NAME} - Código de verificação incorreto na sua conta",
+                message=(
+                    f"Detectamos uma tentativa de login na conta '{user.get_username()}' com um "
+                    "código de verificação (2FA) incorreto.\n\n"
+                    "Se foi você e só digitou o código errado, pode ignorar este e-mail.\n\n"
+                    "Se não foi você, isso pode indicar que sua senha foi comprometida — "
+                    "recomendamos trocar sua senha o quanto antes e verificar os dispositivos "
+                    "conectados à sua conta."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+        except OSError:
+            logger.error("Falha ao enviar alerta de código 2FA incorreto", exc_info=True)

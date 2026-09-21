@@ -1,3 +1,4 @@
+from django import forms
 from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
@@ -24,3 +25,34 @@ class TurnstileAuthenticationForm(AuthenticationForm):
                     code="turnstile_invalid",
                 )
         return super().clean()
+
+
+class TwoFactorCodeForm(forms.Form):
+    """Formulario generico de codigo de 6 digitos — usado tanto no login (TOTP/e-mail)
+    quanto na confirmacao de configuracao do segundo fator."""
+
+    code = forms.CharField(
+        label="Código de verificação",
+        min_length=6,
+        max_length=6,
+        widget=forms.TextInput(
+            attrs={"inputmode": "numeric", "autocomplete": "one-time-code", "autofocus": True}
+        ),
+    )
+
+    def clean_code(self):
+        code = self.cleaned_data["code"].strip()
+        if not code.isdigit():
+            raise ValidationError("O código deve conter só números.", code="invalid_code")
+        return code
+
+
+class TwoFactorMethodForm(forms.Form):
+    """Escolha do metodo de segundo fator na tela de configuracao (auto-cadastro)."""
+
+    METHOD_CHOICES = [
+        ("totp", "Aplicativo autenticador (Google Authenticator, Authy, etc.)"),
+        ("email", "Código por e-mail"),
+    ]
+
+    method = forms.ChoiceField(choices=METHOD_CHOICES, widget=forms.RadioSelect)
