@@ -13,7 +13,9 @@ que está aqui, use a busca do console (ícone de lupa no topo) para achar a tel
 - [x] Par de chaves SSH gerado localmente
 - [x] Instância criada (Ampere A1 tentado, capacidade esgotada → `VM.Standard.E2.1.Micro`) com Ubuntu 24.04.4 LTS
 - [x] IP público reservado (não efêmero) — `163.176.75.32`
-- [x] Security List liberando 22, 80 e 443
+- [x] Security List liberando 22, 80 e 443 — **nota**: 80/443 só foram de fato adicionados em
+      2026-09-21, ao publicar o HTTPS real (o item ficava marcado aqui desde o planejamento
+      inicial, mas nunca tinha sido conferido na prática até então — ver seção "Observações")
 - [x] Primeiro acesso SSH confirmado
 - [x] Hardening de SSH/UFW/Fail2Ban aplicado — ver [`ssh-hardening.md`](ssh-hardening.md)
 - [x] Docker + Compose instalados
@@ -104,13 +106,21 @@ Isso é **redundante de propósito** com o UFW que vai rodar dentro da VM (ver
 [`ssh-hardening.md`](ssh-hardening.md)) — duas camadas de firewall independentes, uma na borda da
 nuvem, outra no host.
 
-> **Opcional, depois que tudo estiver funcionando**: trocar `0.0.0.0/0` das portas 80/443 pelos
-> [ranges de IP da Cloudflare](https://www.cloudflare.com/ips/) apenas — assim nem o tráfego HTTP
-> bruto chega na Oracle Cloud sem passar pela Cloudflare antes. Não faça isso antes de confirmar
-> que o site funciona, para não se trancar para fora durante o teste.
+> **Feito em 2026-09-21** (não mais opcional): 80/443 restritos aos
+> [ranges de IP da Cloudflare](https://www.cloudflare.com/ips/) — mas a restrição real acabou
+> ficando no **UFW** (dentro da VM), não na Security List da Oracle (que segue liberada para
+> `0.0.0.0/0`, redundância aceitável — a camada que importa de verdade é a mais próxima da
+> aplicação). Ver ADR-027 em `docs/architecture/decisions.md`.
 >
 > Restringir a porta 22 a um único IP só vale a pena se você tiver IP fixo (raro em conexão
 > residencial no Brasil) — senão, fique com o Fail2Ban + chave obrigatória como a proteção real.
+>
+> **Pegadinha real encontrada aqui**: mesmo com Security List e UFW liberando 80/443
+> corretamente, o tráfego não passava — a causa era uma regra de firewall de fábrica da própria
+> imagem Ubuntu da Oracle (`/etc/iptables/rules.v4`), sem relação nenhuma com Security
+> List/UFW/NSG. Diagnóstico e correção completos em ADR-026. Se isso acontecer de novo (porta
+> liberada em todo lugar "certo" mas ainda sem resposta), rodar `sudo iptables -L INPUT -n -v
+> --line-numbers` no servidor antes de suspeitar da nuvem.
 
 ## 6. Primeiro acesso SSH
 

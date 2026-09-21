@@ -22,34 +22,20 @@ Atualizado em: 2026-09-21.
 | Gestão de risco 5W2H | `docs/security/risk-matrix.md` |
 | Parede de 2FA (TOTP + e-mail) com alerta em código incorreto + auto-cadastro com QR code | ADR-024, `docs/security/risk-matrix.md` (R03) |
 | CRUD de escrita de chamados (criar/editar) com RBAC — dono edita só enquanto Aberto, staff edita tudo | ADR-025, `docs/security/risk-matrix.md` (R04) |
+| HTTPS real em produção (Certbot, Full strict, UFW restrito à Cloudflare, Authenticated Origin Pulls) | ADR-026 (bug do firewall de fábrica da Oracle), ADR-027, `docs/security/risk-matrix.md` (R08) |
 
 ## O que falta
 
 Ordenado pela sequência já combinada. Cada item tem a spec mínima pra implementar sem re-perguntar
 o óbvio — mas **checar com o usuário antes de qualquer decisão que não esteja aqui**.
 
-### 1. HTTPS real na produção (Certbot → Full strict → HSTS → UFW restrito)
-
-Sequência já definida em `docs/infra/cloudflare-setup.md` ("Próximos passos"), na ordem:
-
-1. Publicar o vhost real do Nginx no host (`docker/nginx/helpdesk.conf`, `server_name
-   uncisal.lserpsistemas.com.br`) — hoje só existe o `default` do Nginx no servidor.
-2. Rodar Certbot no servidor pra emitir certificado real (funciona com o modo `Full` atual da
-   Cloudflare).
-3. Subir o modo SSL/TLS da Cloudflare pra `Full (strict)`.
-4. Habilitar HSTS na Cloudflare (o Django já manda `Strict-Transport-Security` desde `prod.py`,
-   falta o lado da Cloudflare).
-5. Restringir UFW aos ranges de IP da Cloudflare em 80/443 + Authenticated Origin Pulls (mTLS) —
-   fecha R08.
-6. Rodar o teste do Qualys SSL Labs (validação pública exigida pelo enunciado do projeto).
-
-### 2. Backup automatizado, criptografado, fora do servidor
+### 1. Backup automatizado, criptografado, fora do servidor
 
 - R10 no `risk-matrix.md`, hoje 🔴 pendente — é o único risco "Alto" sem nenhuma mitigação ainda.
 - Design já existe em `docs/security/backup-recovery.md` — falta só a implementação (cron na VM +
   destino externo).
 
-### 3. Housekeeping pequeno, sem pressa
+### 2. Housekeeping pequeno, sem pressa
 
 - Confirmar 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — R11.
 - Rotacionar a Turnstile **secret key** no painel da Cloudflare — o valor antigo apareceu em texto
@@ -57,8 +43,12 @@ Sequência já definida em `docs/infra/cloudflare-setup.md` ("Próximos passos")
   neste chat privado), mas é a prática correta.
 - Apagar `prod.env` da pasta temporária de scratch depois que os GitHub Secrets forem conferidos
   (já cumpriu a função, não precisa persistir).
+- Renomear/apagar o arquivo órfão `/etc/iptables/rules.v4` no servidor (ver ADR-026) — hoje
+  inofensivo (nada mais o recarrega), mas fica limpo remover de vez. Bloqueado pelo classificador
+  de segurança do Claude Code quando tentei via SSH; precisa ser o usuário a rodar:
+  `sudo mv /etc/iptables/rules.v4 /etc/iptables/rules.v4.disabled`.
 
-### 4. Manual de estudos + roteiro de apresentação (vídeo de 5–10 min)
+### 3. Manual de estudos + roteiro de apresentação (vídeo de 5–10 min)
 
 Pedido explícito do usuário em 2026-09-21, registrado como **último item**, depois de todo o resto
 acima estar pronto. **Importante: este é um artefato local, fora do repositório** — o usuário foi

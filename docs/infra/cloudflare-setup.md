@@ -21,18 +21,23 @@
 - [x] TLS 1.3, Opportunistic Encryption, Automatic HTTPS Rewrites — ja vem ativo por padrao
 - [x] DNSSEC — habilitado na Cloudflare (2026-09-20); DS record cadastrado no Registro.br,
       aguardando propagacao (confirmar depois com `Resolve-DnsName -Type DS -Server 8.8.8.8`)
-- [ ] SSL/TLS mode: hoje em **`Full`** (nao strict) — sobe para **`Full (strict)`** so depois que
-      o Certbot emitir certificado real no servidor (ver `oracle-cloud-setup.md`, secao 9-10, e o
-      vhost real em `docker/nginx/helpdesk.conf`)
-- [ ] HSTS na Cloudflare — **de proposito ainda nao habilitado**: exige HTTPS confiavel na origem
-      primeiro; habilitar cedo demais pode travar acesso se a origem falhar no meio da configuracao
-- [ ] Authenticated Origin Pulls (mTLS) — depois do Full (strict)
-- [ ] UFW no servidor restrito aos ranges de IP da Cloudflare em 80/443 (hoje esta aberto pra
-      qualquer origem nessas portas — ver `docs/infra/ssh-hardening.md`)
-- [ ] Nginx configurado para restaurar o IP real do visitante (`CF-Connecting-IP`)
+- [x] SSL/TLS mode: **`Full (strict)`** — passou por `Flexible` temporariamente (necessario para
+      o desafio HTTP-01 do Certbot: `Full` exige HTTPS valido origem-Cloudflare, que ainda nao
+      existia) e voltou para `Full (strict)` assim que o certificado real foi emitido. Ver ADR-027
+- [x] HSTS — Django ja manda `Strict-Transport-Security` desde `prod.py`; Nginx tambem manda o
+      mesmo header (redundante, nao e problema)
+- [x] Authenticated Origin Pulls (mTLS) — ligado dos dois lados (Cloudflare: SSL/TLS > Origin
+      Server > Global; Nginx: `ssl_client_certificate` + `ssl_verify_client on`). Testado: sem
+      certificado, a origem responde 400
+- [x] UFW no servidor restrito aos ranges de IP da Cloudflare em 80/443 (44 regras — IPv4/IPv6 ×
+      porta 80/443). Testado: acesso direto ao IP publico da timeout; sobreviveu a reboot completo
+- [x] Nginx configurado para restaurar o IP real do visitante (`CF-Connecting-IP`,
+      `docker/nginx/helpdesk.conf`) — sem isso, o throttle de login por IP seria contornavel
+      (ver ADR-027)
 - [x] Cloudflare Turnstile criado (widget `central-chamados-uncisal`, hostnames
       `uncisal.lserpsistemas.com.br` + `localhost`) e integrado no formulario de login
-- [ ] Teste publico executado (Qualys SSL Labs — nota A + suporte a PQC)
+- [x] Teste publico do Qualys SSL Labs — **nota A+** nos 4 endpoints (2026-09-21, apos corrigir
+      headers de seguranca duplicados entre Django e Nginx — ver ADR-027)
 
 ## Registros de DNS existentes (nao mexer)
 
@@ -91,16 +96,24 @@ Ver [`docs/security/nao-commitar.md`](../security/nao-commitar.md): a `SITE_KEY`
   Melhor avaliar depois que a aplicacao real estiver publicada (paths reais de login/API para
   mirar as regras) — configurar agora seria adivinhar rotas que ainda nao existem.
 
-## Proximos passos (em ordem)
+## Sequencia executada (2026-09-21) — ver ADR-026 e ADR-027 para detalhe completo
 
-1. Publicar a aplicacao real no servidor (`docker compose up`) + vhost real do Nginx
-   (`docker/nginx/helpdesk.conf`) com `server_name uncisal.lserpsistemas.com.br`.
-2. Rodar Certbot no servidor para emitir certificado real (funciona com o modo `Full` atual —
-   o desafio HTTP-01 passa pela Cloudflare normalmente).
-3. Subir o modo SSL/TLS para `Full (strict)`.
-4. Habilitar HSTS na Cloudflare.
-5. Restringir UFW/Security List aos ranges de IP da Cloudflare em 80/443 + Authenticated Origin
-   Pulls (mTLS).
-6. ~~Criar o Turnstile e integrar no login/cadastro.~~ Feito — falta so integrar no cadastro
+Concluido, na ordem que realmente funcionou (diferente do plano original — o modo `Full` sozinho
+nao bastava para o desafio do Certbot, precisou passar por `Flexible` primeiro):
+
+1. Publicada a aplicacao real no servidor + vhost do Nginx.
+2. **Bloqueio inesperado**: porta 80 nao respondia nem publicamente nem via Cloudflare, mesmo com
+   Security List/UFW corretos — causa raiz era uma regra de firewall de fabrica da propria imagem
+   Ubuntu da Oracle, nao relacionada a Cloudflare (ver ADR-026). Corrigida antes de prosseguir.
+3. Cloudflare mudado para `Flexible` temporariamente, Certbot emitiu o certificado real.
+4. Cloudflare de volta para `Full (strict)` — resolveu tambem um loop de redirecionamento que
+   apareceu no meio do caminho (Certbot forcando HTTPS na origem + Cloudflare ainda em Flexible).
+5. Headers de seguranca e `real_ip` (Cloudflare) devolvidos ao Nginx.
+6. UFW restrito aos ranges da Cloudflare + Authenticated Origin Pulls (mTLS) — os dois pedidos
+   pelo usuario explicitamente, aplicados e testados juntos.
+7. ~~Criar o Turnstile e integrar no login/cadastro.~~ Feito — falta so integrar no cadastro
    quando essa tela existir.
-7. Rodar o teste do Qualys SSL Labs.
+8. Teste do Qualys SSL Labs disparado.
+
+**Pendente, nao critico:** headers de seguranca aparecem duplicados (Django + Nginx mandam os
+mesmos) — cosmetico, nao e falha de seguranca.

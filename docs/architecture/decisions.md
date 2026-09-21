@@ -570,3 +570,98 @@ confiar em `status`/`assignee` vindos do POST do cliente pra decidir permissao.
 (404 = nem deveria saber que existe; 403 = sabe que existe, nao pode mexer) e intencional, nao
 inconsistencia — testado explicitamente (`test_user_cannot_edit_someone_elses_ticket` espera 404,
 `test_owner_cannot_edit_ticket_once_no_longer_open` espera 403).
+
+## ADR-026 — HTTP/HTTPS publico nao respondia: regra de firewall de fabrica da Oracle, nao UFW
+
+**Contexto:** ao publicar o vhost real do Nginx e emitir o certificado via Certbot, a porta 80
+(e depois 443) simplesmente nao respondia de fora — timeout puro, nem RST nem erro. UFW mostrava
+`80/tcp ALLOW IN Anywhere` corretamente, a Security List da Oracle Cloud tambem liberava 80/443
+para `0.0.0.0/0`, e um NSG (`ig-quick-action-NSG`) anexado a instancia nao tinha regra de entrada
+nenhuma (nao deveria bloquear nada — Oracle combina Security List + NSG de forma permissiva/OR).
+
+**Diagnostico:** `tcpdump -i any 'tcp port 80'` rodando no proprio servidor, simultaneo a uma
+requisicao externa, confirmou que o pacote SYN **chegava** na interface de rede (`ens3`) — ou
+seja, toda a camada de nuvem (Security List, NSG, roteamento) estava correta. O bloqueio era
+depois disso, dentro do proprio SO. `iptables -L INPUT -n -v --line-numbers` revelou a causa: a
+imagem Ubuntu oficial da Oracle Cloud vem com seu **proprio** conjunto de regras de iptables
+(`/etc/iptables/rules.v4`, cabecalho "CLOUD_IMG: This file was created/modified by the Cloud
+Image build process") que libera **apenas a porta 22** e rejeita tudo o resto — e essas regras
+rodam **antes**, na chain `INPUT` principal, das chains proprias do UFW (`ufw-before-input` etc.)
+serem avaliadas. O UFW nunca chegava a ser consultado para trafego HTTP/HTTPS.
+
+O pacote `iptables-persistent` (que recarregaria esse arquivo a cada boot) ja tinha sido removido
+em algum momento anterior desta sessao (status `rc` no dpkg, servico systemd inexistente) — ou
+seja, o arquivo ja estava orfao, sem nada para reaplica-lo num proximo boot.
+
+**Decisao:** remover a regra `-A INPUT -j REJECT --reject-with icmp-host-prohibited` do ruleset
+ao vivo (`iptables -D INPUT -j REJECT ...`), deixando as chains do UFW serem de fato a unica
+fonte de verdade sobre o que e permitido — consistente com o resto da documentacao do projeto
+(`docs/infra/ssh-hardening.md`, `CLAUDE.md`), que so fala de UFW. O arquivo `rules.v4` foi
+deixado no lugar (renomear/apagar via SSH tambem foi bloqueado pelo classificador de seguranca
+do Claude Code — accao adiada, nao critica, ja que nada mais o recarrega).
+
+**Validado com reboot completo do servidor**: apos `sudo reboot`, o container voltou sozinho
+(restart policy do Docker), o Nginx voltou ativo, e a porta 80/443 continuaram respondendo
+normalmente por fora — confirma que a correcao e permanente mesmo so tendo sido aplicada em
+memoria (nao ha mais nenhum servico que recarregue o arquivo antigo).
+
+**Licao gravada em `CLAUDE.md`**: ao investigar "a porta deveria estar aberta mas nao responde"
+numa VM de nuvem, checar SEMPRE nesta ordem: Security List/NSG (cloud) → `tcpdump` no proprio
+host (confirma se o pacote chega) → `iptables -L INPUT -n -v --line-numbers` completo (nao so
+`ufw status`, que so mostra as regras que o UFW *pensa* que tem, nao a ordem real de avaliacao
+do kernel). Imagens de cloud provider frequentemente vem com hardening de fabrica que compete
+com ferramentas como UFW instaladas depois.
+
+## ADR-027 — HTTPS real em producao: Certbot, Cloudflare Full (strict), UFW restrito, Origin Pulls
+
+**Contexto:** ultima etapa de rede pendente — sair de HTTP puro (testado so via SSH/localhost)
+para HTTPS publico de verdade, seguindo a sequencia ja planejada em `docs/infra/cloudflare-setup.md`.
+
+**Decisoes e ordem (a ordem importa, cada uma depende da anterior):**
+
+1. **Cloudflare temporariamente em modo `Flexible`** antes do Certbot rodar — o modo `Full`
+   anterior exige HTTPS valido entre Cloudflare e a origem, que ainda nao existia (exatamente o
+   que estavamos tentando criar); `Flexible` permite o desafio HTTP-01 do Certbot passar.
+2. **Certbot via `certbot --nginx --redirect`** — emite o certificado e injeta os blocos
+   `listen 443 ssl`/redirect automaticamente. Descoberta: `http2 on;` (sintaxe nova) exige Nginx
+   >=1.25.1; o pacote do Ubuntu 24.04 empacota 1.24.0, entao o vhost usa a sintaxe antiga
+   (`listen 443 ssl http2;`).
+3. **Renovacao automatica ja vem pronta**: Certbot (instalado via snap) cria seu proprio timer
+   systemd (`snap.certbot.renew.timer`, 2x/dia) — nao precisa (nem deve) criar um cron manual
+   redundante. `certbot renew --dry-run` confirmou funcionando (só demorou por causa do atraso
+   aleatorio de ate ~6min que o proprio Certbot adiciona de proposito, para nao sobrecarregar
+   o Let's Encrypt quando muitos servidores renovam ao mesmo tempo — comportamento esperado, nao
+   travamento).
+4. **Cloudflare de volta para `Full (strict)`** assim que o certificado real existe — fecha o
+   loop de redirecionamento que apareceu brevemente (Certbot forcando HTTPS na origem + Cloudflare
+   ainda mandando HTTP pra origem em modo Flexible = loop infinito de 301).
+5. **Nginx recebeu de volta** os headers de seguranca (CSP, HSTS, X-Frame-Options, etc. — tinham
+   ficado de fora porque só o vhost minimo foi publicado antes do Certbot, de proposito) e o
+   `real_ip_header CF-Connecting-IP` + ranges da Cloudflare — sem isso, o app confiaria nesse
+   header vindo de qualquer um, nao so da Cloudflare (ver decisao 6).
+6. **UFW restrito aos ranges de IP da Cloudflare** (80/443, IPv4 e IPv6) — fecha R08. Sem isso,
+   qualquer atacante podia ignorar a Cloudflare, bater direto no IP do servidor, e forjar o
+   header `CF-Connecting-IP` com qualquer valor, driblando o throttle de login
+   (`LoginThrottleService`) por IP. Aplicado manualmente pelo usuario via SSH (mudanca de
+   firewall bloqueada pelo classificador de seguranca do Claude Code mesmo com autorizacao no
+   chat — script pronto foi gerado, so a execucao precisou ser do usuario).
+7. **Authenticated Origin Pulls (mTLS) habilitado nos dois lados** (Cloudflare: SSL/TLS > Origin
+   Server > Global; Nginx: `ssl_client_certificate` com o CA publico da Cloudflare +
+   `ssl_verify_client on`) — camada extra: mesmo que o UFW fosse mal configurado no futuro, a
+   origem so aceita conexao HTTPS assinada pela propria Cloudflare. Confirmado via teste direto:
+   `400 No required SSL certificate was sent` pra quem nao apresenta o certificado certo.
+
+**Validado**: via dominio publico funciona (200, headers presentes); direto no IP (80 ou 443)
+da timeout (UFW); mesmo simulando bypass do UFW, TLS sem certificado da 400. Sobreviveu a reboot
+completo do servidor (ver ADR-026).
+
+**Achado durante o teste do Qualys SSL Labs (nao so cosmetico como se pensou a principio):**
+a primeira rodada deu nota **A-** (nao A) em todos os 4 endpoints, com o motivo explicito
+`"error":"Server provided more than one HSTS header"` — o Django (`SecurityMiddleware`) e o
+Nginx mandavam o mesmo header (`Strict-Transport-Security`, `X-Frame-Options`,
+`X-Content-Type-Options`, `Referrer-Policy`) duas vezes cada, e o Qualys invalida o HSTS por
+completo quando isso acontece (nao da pra saber qual dos dois confiar). Corrigido removendo do
+Nginx tudo que o Django ja manda via `prod.py`, deixando lá so o que o Django nao cobre por
+padrao (`Content-Security-Policy`, `Permissions-Policy`). **Resultado apos a correcao: nota A+
+nos 4 endpoints** (Cloudflare testa IPv4 e IPv6 separadamente) — confirma HSTS valido, forward
+secrecy completo, sem Heartbleed/POODLE/BEAST.

@@ -90,6 +90,13 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
   causa de um `collectstatic` que só tinha rodado localmente, nunca detectado a tempo). Checar via
   `https://github.com/lscussel-uncisal/projeto-uncisal/actions` ou pela API
   (`git credential fill` + `curl` na API do GitHub — não precisa pedir nada novo ao usuário).
+- Se uma porta deveria estar aberta (Security List/NSG da Oracle e UFW liberando) mas o tráfego
+  não chega, **não parar de suspeitar na nuvem** — imagens de cloud provider (Oracle Ubuntu, neste
+  caso) podem vir com seu próprio conjunto de regras de `iptables` de fábrica, que rodam *antes*
+  das chains do UFW e nunca aparecem em `ufw status`. Diagnosticar nesta ordem: Security List/NSG
+  (painel) → `tcpdump -i any 'tcp port N'` no próprio host enquanto testa de fora (confirma se o
+  pacote chega na interface) → `sudo iptables -L INPUT -n -v --line-numbers` completo (não só
+  `ufw status`). Ver ADR-026.
 
 ## Contexto do projeto
 
