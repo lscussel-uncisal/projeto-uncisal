@@ -1,14 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Login · Central de Chamados{% endblock %}
 
+{% block extra_head %}
+{% if turnstile_enabled %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="max-w-sm mx-auto mt-16 bg-white shadow rounded-lg p-6">
     <h1 class="text-xl font-semibold mb-4">Entrar</h1>
 
-    {# TODO(proxima etapa): Cloudflare Turnstile + tela de segundo fator (TOTP/e-mail). #}
+    {# TODO(proxima etapa): parede de segundo fator (TOTP/e-mail) apos a senha. #}
     <form method="post">
         {% csrf_token %}
         {{ form.as_p }}
+        {% if turnstile_enabled %}
+        <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}"></div>
+        {% endif %}
         <button type="submit" class="w-full mt-4 rounded-md bg-slate-900 text-white py-2">
             Entrar
         </button>
