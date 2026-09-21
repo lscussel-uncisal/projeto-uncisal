@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from django.urls import reverse
 
@@ -10,14 +12,34 @@ class TestThrottledLoginView:
     def test_successful_login_records_success_attempt(self, client):
         User.objects.create_user(username="joao", password="senha-forte-123")
 
-        response = client.post(
-            reverse("accounts:login"), {"username": "joao", "password": "senha-forte-123"}
-        )
+        with patch("apps.accounts.forms.TurnstileService.verify", return_value=True):
+            response = client.post(
+                reverse("accounts:login"),
+                {
+                    "username": "joao",
+                    "password": "senha-forte-123",
+                    "cf-turnstile-response": "token",
+                },
+            )
 
         assert response.status_code == 302
         attempt = LoginAttempt.objects.get()
         assert attempt.result == LoginAttempt.Result.SUCCESS
         assert attempt.user.username == "joao"
+
+    def test_login_blocked_without_a_valid_turnstile_token(self, client):
+        User.objects.create_user(username="joao", password="senha-forte-123")
+
+        with patch(
+            "apps.accounts.forms.TurnstileService.verify", return_value=False
+        ) as mock_verify:
+            response = client.post(
+                reverse("accounts:login"), {"username": "joao", "password": "senha-forte-123"}
+            )
+
+        assert response.status_code == 200
+        mock_verify.assert_called_once()
+        assert "_auth_user_id" not in client.session
 
     def test_failed_login_records_invalid_credentials_attempt(self, client):
         User.objects.create_user(username="joao", password="senha-forte-123")
