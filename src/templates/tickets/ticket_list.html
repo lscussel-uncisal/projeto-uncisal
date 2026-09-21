@@ -5,6 +5,9 @@
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-semibold">Chamados</h1>
     <div class="flex items-center gap-4">
+        <a href="{% url 'tickets:create' %}" class="text-sm rounded-md bg-slate-900 text-white px-3 py-1.5">
+            Novo chamado
+        </a>
         <a href="{% url 'accounts:two_factor_setup' %}" class="text-sm text-slate-600 hover:underline">
             Segurança da conta
         </a>
@@ -17,12 +20,19 @@
 
 <div class="bg-white shadow rounded-lg divide-y">
     {% for ticket in tickets %}
-        <div class="p-4 flex justify-between">
+        <div class="p-4 flex justify-between items-center">
             <div>
                 <p class="font-medium">{{ ticket.title }}</p>
                 <p class="text-sm text-slate-500">{{ ticket.get_priority_display }}</p>
             </div>
-            <span class="text-sm px-2 py-1 rounded bg-slate-100">{{ ticket.get_status_display }}</span>
+            <div class="flex items-center gap-3">
+                <span class="text-sm px-2 py-1 rounded bg-slate-100">{{ ticket.get_status_display }}</span>
+                {% if ticket.pk in editable_ticket_ids %}
+                    <a href="{% url 'tickets:update' ticket.pk %}" class="text-sm text-slate-600 hover:underline">
+                        Editar
+                    </a>
+                {% endif %}
+            </div>
         </div>
     {% empty %}
         <p class="p-4 text-slate-500">Nenhum chamado encontrado.</p>

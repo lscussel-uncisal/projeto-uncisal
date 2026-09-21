@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{% if form.instance.pk %}Editar chamado{% else %}Novo chamado{% endif %} · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto bg-white shadow rounded-lg p-6">
+    <h1 class="text-xl font-semibold mb-4">
+        {% if form.instance.pk %}Editar chamado{% else %}Novo chamado{% endif %}
+    </h1>
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="flex gap-3 mt-4">
+            <button type="submit" class="rounded-md bg-slate-900 text-white px-4 py-2">
+                Salvar
+            </button>
+            <a href="{% url 'tickets:list' %}" class="px-4 py-2 text-slate-600 hover:underline">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -535,3 +535,38 @@ estiverem em andamento no mesmo navegador ao mesmo tempo (pouco provavel, mas gr
 Testado via TDD: `apps/accounts/tests/test_two_factor_service.py`,
 `test_views.py::TestTwoFactorVerifyView`, `test_two_factor_setup_views.py` — cobre TOTP e e-mail,
 codigo certo/errado, throttle, e falha de SMTP em ambos os fluxos.
+
+## ADR-025 — CRUD de escrita de chamados: formularios separados por papel, nao um so condicional
+
+**Contexto:** faltava criar/editar chamado (so a leitura, `TicketService.visible_to`, estava
+protegida por papel). Era preciso decidir quem pode editar o que, sem cair no erro classico de
+confiar em `status`/`assignee` vindos do POST do cliente pra decidir permissao.
+
+**Decisoes:**
+
+1. **Tres `ModelForm`s especificos**, nao um formulario generico com campos condicionais em
+   Python: `TicketCreateForm` (title/description/priority — `requester` e sempre
+   `request.user`, nunca do form), `TicketUserUpdateForm` (so title/description, pro dono do
+   chamado) e `TicketStaffUpdateForm` (todos os campos, incluindo `status`/`assignee`, pra
+   admin/suporte). Um usuario comum que tentasse enviar `status`/`assignee` no POST nem teria
+   esse campo processado — o `ModelForm` do dono simplesmente nao declara esses campos, entao
+   `cleaned_data` nunca os contem. Mais seguro que aceitar o campo e ignorar/validar depois.
+2. **Regra de quando o dono pode editar**: usuario comum edita o proprio chamado so enquanto ele
+   segue `Aberto` (`TicketService.can_edit`) — uma vez que o status muda (suporte comecou a
+   mexer), so admin/suporte edita dali pra frente. Isso e uma decisao de negocio nao
+   explicitamente pedida pelo usuario, mas necessaria pra implementar "edicao com RBAC" de forma
+   concreta — documentada aqui explicitamente pra ser facil de revisar/contestar depois, em vez
+   de ficar implicita no codigo.
+3. **`assignee` restrito a `Role.ADMIN`/`Role.SUPPORT`** no `__init__` do `TicketStaffUpdateForm`
+   (`queryset` filtrado) — nao da pra atribuir chamado a um usuario comum, mesmo que o form seja
+   manipulado (o queryset e checado no `clean()` do `ModelChoiceField` do Django, entao um `pk` de
+   usuario comum enviado no POST reprova a validacao, nao so a UI esconde a opcao).
+4. **`TicketUpdateView.get_queryset()` retorna `TicketService.visible_to()`**: um chamado que o
+   usuario nem deveria enxergar da 404 direto (nunca aparece no template, nunca ecoa que existe).
+   `get_object()` some com uma segunda checagem (`can_edit`) por cima disso — um chamado visivel
+   mas nao editavel (proprio chamado, ja fechado) da 403, nao 404, distincao proposital.
+
+**Consequencias:** dois erros HTTP diferentes pro mesmo "nao pode editar" dependendo do motivo
+(404 = nem deveria saber que existe; 403 = sabe que existe, nao pode mexer) e intencional, nao
+inconsistencia — testado explicitamente (`test_user_cannot_edit_someone_elses_ticket` espera 404,
+`test_owner_cannot_edit_ticket_once_no_longer_open` espera 403).

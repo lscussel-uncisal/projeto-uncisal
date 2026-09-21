@@ -21,22 +21,14 @@ Atualizado em: 2026-09-21.
 | 10 PRs do Dependabot revisados/mergeados + incidente de sobrecarga do servidor corrigido | ADR-023, `CLAUDE.md` |
 | Gestão de risco 5W2H | `docs/security/risk-matrix.md` |
 | Parede de 2FA (TOTP + e-mail) com alerta em código incorreto + auto-cadastro com QR code | ADR-024, `docs/security/risk-matrix.md` (R03) |
+| CRUD de escrita de chamados (criar/editar) com RBAC — dono edita só enquanto Aberto, staff edita tudo | ADR-025, `docs/security/risk-matrix.md` (R04) |
 
 ## O que falta
 
 Ordenado pela sequência já combinada. Cada item tem a spec mínima pra implementar sem re-perguntar
 o óbvio — mas **checar com o usuário antes de qualquer decisão que não esteja aqui**.
 
-### 1. CRUD de escrita de chamados com RBAC — próximo item
-
-- Hoje só a **leitura** de chamados está protegida por papel (`TicketService.visible_to`).
-  Criar/editar chamado ainda não existe.
-- Usar `ModelForm` + `apps.accounts.permissions.role_required` (ou checagem equivalente em
-  `TicketService`) antes de qualquer `.save()` — nunca confiar em dado vindo do cliente pra
-  decidir permissão.
-- Fecha R04 por completo — ver `docs/security/risk-matrix.md`.
-
-### 2. HTTPS real na produção (Certbot → Full strict → HSTS → UFW restrito)
+### 1. HTTPS real na produção (Certbot → Full strict → HSTS → UFW restrito)
 
 Sequência já definida em `docs/infra/cloudflare-setup.md` ("Próximos passos"), na ordem:
 
@@ -51,13 +43,13 @@ Sequência já definida em `docs/infra/cloudflare-setup.md` ("Próximos passos")
    fecha R08.
 6. Rodar o teste do Qualys SSL Labs (validação pública exigida pelo enunciado do projeto).
 
-### 3. Backup automatizado, criptografado, fora do servidor
+### 2. Backup automatizado, criptografado, fora do servidor
 
 - R10 no `risk-matrix.md`, hoje 🔴 pendente — é o único risco "Alto" sem nenhuma mitigação ainda.
 - Design já existe em `docs/security/backup-recovery.md` — falta só a implementação (cron na VM +
   destino externo).
 
-### 4. Housekeeping pequeno, sem pressa
+### 3. Housekeeping pequeno, sem pressa
 
 - Confirmar 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — R11.
 - Rotacionar a Turnstile **secret key** no painel da Cloudflare — o valor antigo apareceu em texto
@@ -66,7 +58,7 @@ Sequência já definida em `docs/infra/cloudflare-setup.md` ("Próximos passos")
 - Apagar `prod.env` da pasta temporária de scratch depois que os GitHub Secrets forem conferidos
   (já cumpriu a função, não precisa persistir).
 
-### 5. Manual de estudos + roteiro de apresentação (vídeo de 5–10 min)
+### 4. Manual de estudos + roteiro de apresentação (vídeo de 5–10 min)
 
 Pedido explícito do usuário em 2026-09-21, registrado como **último item**, depois de todo o resto
 acima estar pronto. **Importante: este é um artefato local, fora do repositório** — o usuário foi
