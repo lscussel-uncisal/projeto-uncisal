@@ -48,8 +48,10 @@ segurança.
 - [x] Implementar rate limiting em login (`LoginThrottleService` + `ThrottledLoginView`)
 - [x] Trocar hasher para Argon2id
 - [x] Páginas de erro customizadas (403/404/500), sem stack trace
+- [x] Cloudflare Turnstile integrado no login (`TurnstileService`, `TurnstileAuthenticationForm`),
+      com `try/except` ao redor da chamada HTTP (falha fechado, nunca expõe o motivo real)
 - [ ] Rate limiting específico na etapa de verificação do código 2FA (quando a tela existir)
-- [ ] `try/except` ao redor das chamadas HTTP ao Turnstile e do envio de e-mail (quando implementados)
+- [ ] `try/except` ao redor do envio de e-mail (quando implementado)
 - [ ] Confirmar com o usuário o conjunto final (3 ou 5 categorias)
 - [ ] Apontar arquivo/linha exata de cada mitigação após a implementação
 - [ ] Copiar o resumo final para a tabela do `README.md`
