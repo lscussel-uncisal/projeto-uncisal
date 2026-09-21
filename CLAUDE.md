@@ -58,6 +58,14 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
   ou zoom — já causou um bug real (um "A" a mais na Turnstile site key, widget quebrado com erro
   400020). Preferir: copiar direto do botão de copiar da própria UI, ler da URL quando aparecer
   lá, ou pedir pro usuário colar. Zoom/OCR visual é o último recurso, nunca a fonte de verdade.
+- **Nunca** mergear/pushar várias mudanças independentes em sequência rápida direto na `main`
+  quando o deploy é automático — cada push dispara seu próprio job `deploy`, e mergear vários PRs
+  um atrás do outro (ex.: uma leva de PRs do Dependabot) empilha `docker compose up --build`
+  concorrentes via SSH no servidor. Já derrubou a responsividade do servidor de produção (954 MB
+  de RAM, sem swap — ver ADR-023). O job `deploy` em `deploy.yml` já tem
+  `concurrency: { group: production-deploy, cancel-in-progress: true }` para mitigar isso, mas
+  ainda assim: preferir agrupar mudanças relacionadas num push só, ou espaçar merges esperando o
+  deploy anterior terminar, em vez de depender só da trava.
 
 ## Sempre fazer
 

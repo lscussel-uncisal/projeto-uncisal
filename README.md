@@ -115,6 +115,10 @@ Detalhes passo a passo em [`docs/infra/`](docs/infra/):
 
 Decisões de arquitetura registradas em [`docs/architecture/decisions.md`](docs/architecture/decisions.md).
 
+## Status do projeto
+
+- [O que já está pronto e o que falta (com spec mínima de cada pendência)](docs/project/status-e-pendencias.md)
+
 ## Gestão de risco
 
 - [Matriz de risco + plano de ação 5W2H](docs/security/risk-matrix.md)
