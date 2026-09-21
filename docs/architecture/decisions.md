@@ -453,3 +453,46 @@ reescrever isso sem forcar o historico (nao fazemos isso sem pedido explicito). 
 commit, `main` volta a ficar verde. **Licao gravada em `CLAUDE.md`**: nunca considerar uma tarefa
 "concluida" so porque `pytest` passou localmente — falta ainda checar se o commit anterior ficou
 verde no CI antes de empilhar mais trabalho em cima.
+
+## ADR-022 — Healthcheck do Docker sempre "unhealthy" em producao (Host header ausente)
+
+**Contexto:** apos o primeiro deploy real em producao, `docker ps` mostrava o container
+permanentemente `unhealthy`, apesar de `/healthz/` responder `200` normalmente via `curl` com o
+`Host` correto. O `HEALTHCHECK` do Dockerfile chamava `urllib.request.urlopen('http://127.0.0.1:8000/healthz/')`
+sem informar `Host` — o Python usa `127.0.0.1` como `Host` default, que nao esta (de proposito) em
+`ALLOWED_HOSTS` de producao (ver `config/settings/prod.py`). O Django devolvia `400 Bad Request`
+(`DisallowedHost`), reprovando o healthcheck a cada ciclo — sem nenhum efeito real no
+funcionamento da aplicacao (o `restart: unless-stopped` do compose nao reinicia por causa de
+healthcheck falho, entao ninguem percebeu ate uma inspecao manual).
+
+**Decisao:** o `CMD` do `HEALTHCHECK` agora le `ALLOWED_HOSTS` do proprio ambiente do container
+(o mesmo valor que a aplicacao ja usa, via `env_file`) e envia como `Host` header explicito — em vez
+de fixar um dominio no Dockerfile, o que amarraria a imagem a um ambiente especifico.
+
+**Consequencias:** nao adicionar `127.0.0.1`/`localhost` a `ALLOWED_HOSTS` de producao so pra
+satisfazer o healthcheck — isso reabriria a superficie de ataque que `ALLOWED_HOSTS` restrito existe
+pra fechar (Host header injection / cache poisoning). O fix fica inteiramente no lado do healthcheck.
+
+## ADR-023 — Merges sequenciais de PR sobrecarregaram o servidor (recursos limitados do free tier)
+
+**Contexto:** ao revisar e mergear os 10 PRs abertos pelo Dependabot em sequencia rapida (loop com
+poucos segundos de intervalo entre cada merge), cada merge individual e um push separado para
+`main` — e cada push dispara seu proprio job `deploy` no GitHub Actions. Isso resultou em ate 9
+execucoes de `docker compose up -d --build` tentando rodar concorrentemente via SSH na mesma
+instancia Oracle Cloud Free Tier (954 MB de RAM, sem swap configurado). O servidor ficou
+sobrecarregado a ponto de comandos SSH simples (`ps aux`) demorarem mais de 2 minutos para
+responder; o pior risco real era `git pull` concorrente na mesma working copy (`~/helpdesk`)
+corrompendo o checkout, ainda que isso nao tenha se concretizado desta vez.
+
+**Como foi resolvido:** aguardado o servidor drenar a fila sozinho (os processos de build mais
+antigos foram terminando por conta propria conforme a contencao de CPU/memoria aliviava),
+confirmado via `ps aux` que nao sobrou nenhum processo de build parado, e validado o estado final
+(`git log`, versao do pacote instalado, `/healthz/`) batendo com o commit esperado.
+
+**Licao para o futuro (gravada tambem em `CLAUDE.md`):** nunca mergear/pushar multiplas mudancas
+independentes em sequencia rapida direto na `main` quando o deploy e automatico e o servidor de
+destino tem recursos limitados — preferir agrupar em um unico push (ex.: um branch/PR combinando
+as dependencias, ou espacar os merges o suficiente pro deploy anterior terminar antes do proximo
+comecar). Nao ha trava de concorrencia no job `deploy` do `deploy.yml` hoje; adicionar
+`concurrency: { group: deploy, cancel-in-progress: false }` no workflow e uma melhoria futura
+razoavel para eliminar esse risco estruturalmente, em vez de depender de disciplina manual.

@@ -71,7 +71,15 @@ USER app
 
 EXPOSE 8000
 
+# O Host default do urlopen ("127.0.0.1") nao esta em ALLOWED_HOSTS em producao (de proposito,
+# ver config/settings/prod.py) - sem o header abaixo o Django devolve 400 e o healthcheck
+# fica sempre "unhealthy" mesmo com a aplicacao respondendo normalmente. Le ALLOWED_HOSTS do
+# proprio ambiente do container em vez de fixar um dominio, para funcionar em qualquer settings.
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/')" || exit 1
+    CMD python -c "\
+import os, urllib.request; \
+host = os.environ.get('ALLOWED_HOSTS', 'localhost').split(',')[0]; \
+req = urllib.request.Request('http://127.0.0.1:8000/healthz/', headers={'Host': host}); \
+urllib.request.urlopen(req, timeout=2)" || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]

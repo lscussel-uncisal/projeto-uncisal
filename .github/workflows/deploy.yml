@@ -30,6 +30,15 @@ jobs:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # O servidor de destino (Oracle Cloud Free Tier) tem so 954 MB de RAM e nenhum swap - dois
+    # "docker compose up --build" concorrentes ja derrubaram a responsividade do SSH (ADR-023).
+    # Deploys concorrentes tambem arriscam um "git pull" corrompendo a working copy no servidor.
+    # Enfileirar por grupo e cancelar o que estiver pendente quando um push mais novo chegar:
+    # so o estado final (o commit mais recente) importa, entao rodar deploys intermediarios seria
+    # so desperdicio de recursos num servidor ja escasso.
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
 
