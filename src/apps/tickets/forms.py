@@ -1,10 +1,11 @@
 from django import forms
 
 from apps.accounts.models import Role, User
+from apps.core.forms import TailwindStyledFormMixin
 from apps.tickets.models import Ticket
 
 
-class TicketCreateForm(forms.ModelForm):
+class TicketCreateForm(TailwindStyledFormMixin, forms.ModelForm):
     """Abertura de chamado: requester nunca vem do form (é sempre request.user, setado na
     view) — só os campos que o próprio solicitante decide fazem sentido aqui."""
 
@@ -13,7 +14,7 @@ class TicketCreateForm(forms.ModelForm):
         fields = ["title", "description", "priority"]
 
 
-class TicketUserUpdateForm(forms.ModelForm):
+class TicketUserUpdateForm(TailwindStyledFormMixin, forms.ModelForm):
     """Edição pelo dono do chamado: só título/descrição. Status/prioridade/responsável são
     decisão do suporte, não do solicitante — ver TicketStaffUpdateForm."""
 
@@ -22,7 +23,7 @@ class TicketUserUpdateForm(forms.ModelForm):
         fields = ["title", "description"]
 
 
-class TicketStaffUpdateForm(forms.ModelForm):
+class TicketStaffUpdateForm(TailwindStyledFormMixin, forms.ModelForm):
     """Edição por admin/suporte: todos os campos, incluindo triagem (status, prioridade,
     responsável)."""
 

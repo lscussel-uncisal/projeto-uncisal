@@ -20,13 +20,18 @@ class Priority(models.TextChoices):
 class Ticket(TimeStampedModel):
     """Chamado registrado por um usuário e opcionalmente direcionado a um agente de suporte."""
 
-    title = models.CharField(max_length=150)
-    description = models.TextField()
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
-    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    title = models.CharField("Título", max_length=150)
+    description = models.TextField("Descrição")
+    status = models.CharField("Status", max_length=20, choices=Status.choices, default=Status.OPEN)
+    priority = models.CharField(
+        "Prioridade", max_length=10, choices=Priority.choices, default=Priority.MEDIUM
+    )
 
     requester = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="requested_tickets"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="requested_tickets",
+        verbose_name="Solicitante",
     )
     assignee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -34,6 +39,7 @@ class Ticket(TimeStampedModel):
         null=True,
         blank=True,
         related_name="assigned_tickets",
+        verbose_name="Responsável",
     )
 
     class Meta:

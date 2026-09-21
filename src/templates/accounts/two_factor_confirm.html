@@ -2,27 +2,33 @@
 {% block title %}Confirmar 2FA · Central de Chamados{% endblock %}
 
 {% block content %}
-<div class="max-w-sm mx-auto mt-16 bg-white shadow rounded-lg p-6">
-    <h1 class="text-xl font-semibold mb-4">Confirmar segundo fator</h1>
-
-    {% if method == "totp" %}
-        <p class="text-sm text-slate-600 mb-3">
-            Escaneie este QR code com seu aplicativo autenticador (Google Authenticator, Authy,
-            etc.) e digite o código de 6 dígitos que ele mostrar.
+<div class="max-w-sm mx-auto mt-16">
+    <div class="mb-6 text-center">
+        <h1 class="text-lg font-semibold text-slate-900">Confirmar segundo fator</h1>
+        <p class="text-sm text-slate-500">
+            {% if method == "totp" %}
+                Escaneie o QR code com seu aplicativo autenticador e digite o código gerado.
+            {% else %}
+                Enviamos um código de 6 dígitos para o seu e-mail. Digite abaixo para confirmar.
+            {% endif %}
         </p>
-        <img src="{{ qr_code_data_uri }}" alt="QR code de configuração do 2FA" class="mx-auto mb-4">
-    {% else %}
-        <p class="text-sm text-slate-600 mb-4">
-            Enviamos um código de 6 dígitos para o seu e-mail. Digite abaixo para confirmar.
-        </p>
-    {% endif %}
+    </div>
 
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" class="w-full mt-4 rounded-md bg-slate-900 text-white py-2">
-            Confirmar
-        </button>
-    </form>
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        {% if method == "totp" %}
+            <div class="mb-4 flex justify-center rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <img src="{{ qr_code_data_uri }}" alt="QR code de configuração do 2FA" class="h-44 w-44">
+            </div>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            {% include "partials/form_fields.html" %}
+            <button type="submit"
+                class="w-full rounded-md bg-slate-900 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2">
+                Confirmar
+            </button>
+        </form>
+    </div>
 </div>
 {% endblock %}

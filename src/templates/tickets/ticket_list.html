@@ -2,40 +2,57 @@
 {% block title %}Chamados · Central de Chamados{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-semibold">Chamados</h1>
+<div class="mb-6 flex items-center justify-between">
+    <h1 class="text-xl font-semibold text-slate-900">Chamados</h1>
     <div class="flex items-center gap-4">
-        <a href="{% url 'tickets:create' %}" class="text-sm rounded-md bg-slate-900 text-white px-3 py-1.5">
-            Novo chamado
+        <a href="{% url 'tickets:create' %}"
+            class="rounded-md bg-slate-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
+            + Novo chamado
         </a>
-        <a href="{% url 'accounts:two_factor_setup' %}" class="text-sm text-slate-600 hover:underline">
+        <a href="{% url 'accounts:two_factor_setup' %}" class="text-sm text-slate-600 hover:text-slate-900 hover:underline">
             Segurança da conta
         </a>
         <form method="post" action="{% url 'accounts:logout' %}">
             {% csrf_token %}
-            <button type="submit" class="text-sm text-slate-600 hover:underline">Sair</button>
+            <button type="submit" class="text-sm text-slate-600 hover:text-slate-900 hover:underline">Sair</button>
         </form>
     </div>
 </div>
 
-<div class="bg-white shadow rounded-lg divide-y">
+<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
     {% for ticket in tickets %}
-        <div class="p-4 flex justify-between items-center">
-            <div>
-                <p class="font-medium">{{ ticket.title }}</p>
-                <p class="text-sm text-slate-500">{{ ticket.get_priority_display }}</p>
+        <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-4 last:border-b-0 hover:bg-slate-50">
+            <div class="min-w-0">
+                <p class="truncate font-medium text-slate-900">{{ ticket.title }}</p>
+                <p class="text-sm text-slate-500">
+                    Prioridade:
+                    <span class="{% if ticket.priority == 'high' %}text-red-600{% elif ticket.priority == 'medium' %}text-amber-600{% else %}text-slate-500{% endif %} font-medium">
+                        {{ ticket.get_priority_display }}
+                    </span>
+                </p>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="text-sm px-2 py-1 rounded bg-slate-100">{{ ticket.get_status_display }}</span>
+            <div class="flex shrink-0 items-center gap-3">
+                <span class="rounded-full px-2.5 py-1 text-xs font-medium
+                    {% if ticket.status == 'open' %}bg-blue-50 text-blue-700
+                    {% elif ticket.status == 'in_progress' %}bg-amber-50 text-amber-700
+                    {% elif ticket.status == 'resolved' %}bg-green-50 text-green-700
+                    {% else %}bg-slate-100 text-slate-600{% endif %}">
+                    {{ ticket.get_status_display }}
+                </span>
                 {% if ticket.pk in editable_ticket_ids %}
-                    <a href="{% url 'tickets:update' ticket.pk %}" class="text-sm text-slate-600 hover:underline">
+                    <a href="{% url 'tickets:update' ticket.pk %}" class="text-sm text-slate-600 hover:text-slate-900 hover:underline">
                         Editar
                     </a>
                 {% endif %}
             </div>
         </div>
     {% empty %}
-        <p class="p-4 text-slate-500">Nenhum chamado encontrado.</p>
+        <div class="p-10 text-center">
+            <p class="text-sm text-slate-500">Nenhum chamado encontrado.</p>
+            <a href="{% url 'tickets:create' %}" class="mt-2 inline-block text-sm text-slate-700 hover:underline">
+                Abrir o primeiro chamado
+            </a>
+        </div>
     {% endfor %}
 </div>
 {% endblock %}

@@ -86,6 +86,12 @@ ser servido; o Whitenoise quebra se tentar processar um CSS com `@import "tailwi
 No build da imagem Docker isso é recompilado automaticamente, então a versão commitada nunca é a
 fonte de verdade em produção.
 
+## Rodando localmente no Windows
+
+Atalhos prontos em [`scripts/windows/`](scripts/windows/) — `dev-up.bat` sobe o servidor de
+desenvolvimento (com migrações aplicadas), `dev-down.bat` derruba. Ver o
+[`README`](scripts/windows/README.md) da pasta pra detalhes.
+
 ## Testes
 
 Desenvolvimento orientado a testes (pytest + pytest-django):

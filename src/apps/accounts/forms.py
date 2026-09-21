@@ -4,9 +4,10 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 
 from apps.accounts.services import TurnstileService, client_ip
+from apps.core.forms import TailwindStyledFormMixin
 
 
-class TurnstileAuthenticationForm(AuthenticationForm):
+class TurnstileAuthenticationForm(TailwindStyledFormMixin, AuthenticationForm):
     """AuthenticationForm padrao do Django + verificacao do Cloudflare Turnstile.
 
     Turnstile e checado ANTES das credenciais (falha rapido em trafego automatizado,
@@ -27,7 +28,7 @@ class TurnstileAuthenticationForm(AuthenticationForm):
         return super().clean()
 
 
-class TwoFactorCodeForm(forms.Form):
+class TwoFactorCodeForm(TailwindStyledFormMixin, forms.Form):
     """Formulario generico de codigo de 6 digitos — usado tanto no login (TOTP/e-mail)
     quanto na confirmacao de configuracao do segundo fator."""
 
