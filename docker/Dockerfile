@@ -6,14 +6,23 @@
 # algum template mudar as classes usadas.
 FROM python:3.12-slim AS css-builder
 
+# Preenchido automaticamente pelo BuildKit (amd64 numa VM Oracle E2/AMD, arm64 numa Ampere A1 —
+# ver docs/infra/oracle-cloud-setup.md). Sem isto, o binario ficaria fixo para uma arquitetura so.
+ARG TARGETARCH
+
 WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL -o /usr/local/bin/tailwindcss \
-      https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
+RUN case "${TARGETARCH}" in \
+      amd64) TW_ARCH=x64 ;; \
+      arm64) TW_ARCH=arm64 ;; \
+      *) echo "Arquitetura nao suportada: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL -o /usr/local/bin/tailwindcss \
+      "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-${TW_ARCH}" \
     && chmod +x /usr/local/bin/tailwindcss
 
 COPY src/templates/ /app/templates/
