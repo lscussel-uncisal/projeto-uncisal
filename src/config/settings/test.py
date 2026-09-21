@@ -13,6 +13,15 @@ DATABASES = {
 # Hasher rapido: testes nao precisam da seguranca completa do Argon2/PBKDF2 iterado.
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
+# Testes nao devem depender de "collectstatic" ter rodado antes (a manifest storage de
+# base.py e para producao, so existe apos esse passo de build). Sem isto, qualquer template
+# que use {% static %} falha com "Missing staticfiles manifest entry" num checkout limpo —
+# foi exatamente o que quebrou o CI, mascarado localmente por um staticfiles/ antigo em disco.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 # Turnstile em modo de teste (chaves oficiais de teste da Cloudflare, sempre validas)
