@@ -27,6 +27,15 @@
                     Chamados
                 </a>
 
+                {% if user.role == 'admin' %}
+                <a href="{% url 'accounts:user_list' %}"
+                    class="flex items-center gap-1.5 rounded-md px-3 py-1.5 transition
+                        {% if request.resolver_match.url_name == 'user_list' %}bg-slate-100 font-medium text-slate-900{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M7 8a3 3 0 100-6 3 3 0 000 6zM14.5 9a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM1.615 16.428a1.224 1.224 0 01-.569-1.175 6.002 6.002 0 0111.908 0c.058.467-.172.92-.57 1.174A9.953 9.953 0 017 18a9.953 9.953 0 01-5.385-1.572zM14.5 16h-.106c.07-.297.088-.611.048-.933a7.47 7.47 0 00-1.588-3.755 4.502 4.502 0 015.874 2.636.818.818 0 01-.36.98A7.465 7.465 0 0114.5 16z"/></svg>
+                    Usuários
+                </a>
+                {% endif %}
+
                 <details class="group relative">
                     <summary class="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-3 py-1.5 text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
                         <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
@@ -34,6 +43,10 @@
                         <svg class="h-3 w-3 text-slate-400 transition group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                     </summary>
                     <div class="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                        <a href="{% url 'accounts:profile' %}" class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                            <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 8a3 3 0 100-6 3 3 0 000 6zm-7 8a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+                            Meu perfil
+                        </a>
                         <a href="{% url 'accounts:two_factor_setup' %}" class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
                             <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.661 2.237a.531.531 0 01.678 0 11.947 11.947 0 007.078 2.749.5.5 0 01.479.425c.069.52.104 1.05.104 1.589 0 5.162-3.26 9.563-7.834 11.256a.48.48 0 01-.332 0C5.26 16.564 2 12.163 2 7c0-.538.035-1.069.104-1.589a.5.5 0 01.48-.425 11.947 11.947 0 007.077-2.75z" clip-rule="evenodd"/></svg>
                             Segurança da conta

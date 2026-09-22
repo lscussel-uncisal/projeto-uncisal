@@ -7,24 +7,30 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import redirect
+from django.http import HttpResponseBadRequest
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import FormView, TemplateView
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_POST
+from django.views.generic import FormView, ListView, TemplateView, UpdateView
 
 from apps.accounts.forms import (
     PasswordChangeForm,
     PasswordResetRequestForm,
+    ProfileForm,
     TurnstileAuthenticationForm,
     TwoFactorCodeForm,
     TwoFactorMethodForm,
 )
-from apps.accounts.models import LoginAttempt, TwoFactorDevice, TwoFactorMethod, User
+from apps.accounts.models import LoginAttempt, Role, TwoFactorDevice, TwoFactorMethod, User
+from apps.accounts.permissions import role_required
 from apps.accounts.services import (
     AccountNotificationService,
     LoginThrottleService,
     PasswordResetThrottleService,
     TwoFactorService,
+    UserAdminService,
     client_ip,
 )
 
@@ -387,3 +393,51 @@ class AccountPasswordChangeView(auth_views.PasswordChangeView):
         response = super().form_valid(form)
         messages.success(self.request, "Senha alterada com sucesso.")
         return response
+
+
+class ProfileUpdateView(LoginRequiredMixin, UpdateView):
+    """Autoatendimento: o usuário edita o próprio nome. `get_object` sempre retorna
+    `request.user`, ignorando qualquer id/pk que venha no POST — não há como um usuário
+    editar o nome de outra pessoa via dado forjado no formulário."""
+
+    model = User
+    form_class = ProfileForm
+    template_name = "accounts/profile.html"
+    success_url = reverse_lazy("tickets:list")
+
+    def get_object(self, queryset=None):
+        return self.request.user
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Nome atualizado com sucesso.")
+        return response
+
+
+@method_decorator(role_required(Role.ADMIN), name="dispatch")
+class UserListView(ListView):
+    """Gestão de usuários (ativar/desativar). Protegida no servidor por role_required —
+    quem não for Role.ADMIN recebe 403 mesmo sabendo a URL, não é só um link escondido."""
+
+    model = User
+    template_name = "accounts/user_list.html"
+    context_object_name = "users"
+
+    def get_queryset(self):
+        return User.objects.all().order_by("username")
+
+
+@role_required(Role.ADMIN)
+@require_POST
+def user_toggle_active(request, pk):
+    """Ativa/desativa um usuário. Mesma proteção server-side de UserListView — GET não é
+    aceito de propósito (ação com efeito colateral não pode ser um link/GET, CSRF-safe)."""
+    target = get_object_or_404(User, pk=pk)
+    try:
+        UserAdminService.toggle_active(actor=request.user, target=target)
+    except ValueError:
+        return HttpResponseBadRequest("Não é possível ativar/desativar a própria conta.")
+
+    status = "ativado" if target.is_active else "desativado"
+    messages.success(request, f"{target.display_name} foi {status}.")
+    return redirect("accounts:user_list")

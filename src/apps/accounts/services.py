@@ -293,3 +293,14 @@ class TwoFactorService:
             )
         except OSError:
             logger.error("Falha ao enviar alerta de código 2FA incorreto", exc_info=True)
+
+
+class UserAdminService:
+    """Regra de negócio de gestão de usuários (ativar/desativar), isolada da view (SRP)."""
+
+    @staticmethod
+    def toggle_active(*, actor: User, target: User) -> None:
+        if actor.pk == target.pk:
+            raise ValueError("Não é possível ativar/desativar a própria conta.")
+        target.is_active = not target.is_active
+        target.save(update_fields=["is_active"])

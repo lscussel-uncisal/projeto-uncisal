@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Usuários · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-xl font-semibold text-slate-900">Usuários</h1>
+    <p class="text-sm text-slate-500">Ativar/desativar afeta login e recuperação de senha imediatamente.</p>
+</div>
+
+<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    {% for u in users %}
+        <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-4 last:border-b-0">
+            <div class="min-w-0">
+                <p class="truncate font-medium text-slate-900">{{ u.display_name }}</p>
+                <p class="truncate text-sm text-slate-500">{{ u.username }} · {{ u.get_role_display }}</p>
+            </div>
+            <div class="flex shrink-0 items-center gap-3">
+                <span class="rounded-full px-2.5 py-1 text-xs font-medium
+                    {% if u.is_active %}bg-green-50 text-green-700{% else %}bg-slate-100 text-slate-500{% endif %}">
+                    {% if u.is_active %}Ativo{% else %}Desativado{% endif %}
+                </span>
+                {% if u.pk != request.user.pk %}
+                    <form method="post" action="{% url 'accounts:user_toggle_active' u.pk %}">
+                        {% csrf_token %}
+                        <button type="submit"
+                            class="rounded-md border px-3 py-1.5 text-sm transition
+                                {% if u.is_active %}border-red-300 text-red-700 hover:bg-red-50{% else %}border-green-300 text-green-700 hover:bg-green-50{% endif %}">
+                            {% if u.is_active %}Desativar{% else %}Ativar{% endif %}
+                        </button>
+                    </form>
+                {% else %}
+                    <span class="text-xs text-slate-400">Sua conta</span>
+                {% endif %}
+            </div>
+        </div>
+    {% empty %}
+        <div class="p-10 text-center">
+            <p class="text-sm text-slate-500">Nenhum usuário encontrado.</p>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

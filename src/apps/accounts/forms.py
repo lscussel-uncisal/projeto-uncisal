@@ -4,6 +4,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.forms import PasswordChangeForm as DjangoPasswordChangeForm
 from django.core.exceptions import ValidationError
 
+from apps.accounts.models import User
 from apps.accounts.services import TurnstileService, client_ip
 from apps.core.forms import TailwindStyledFormMixin
 
@@ -49,6 +50,17 @@ class PasswordResetRequestForm(TurnstileProtectedFormMixin, TailwindStyledFormMi
 
 class PasswordChangeForm(TailwindStyledFormMixin, DjangoPasswordChangeForm):
     """PasswordChangeForm padrao do Django (exige a senha atual) + estilo Tailwind."""
+
+
+class ProfileForm(TailwindStyledFormMixin, forms.ModelForm):
+    """Autoatendimento: o próprio usuário edita nome/sobrenome (User.display_name). Nunca
+    inclui e-mail/username aqui — troca de e-mail de login é operação sensível o bastante
+    pra não caber num form de "editar meu nome" (fora do escopo atual)."""
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name"]
+        labels = {"first_name": "Nome", "last_name": "Sobrenome"}
 
 
 class TwoFactorCodeForm(TailwindStyledFormMixin, forms.Form):

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Meu perfil · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto mt-8">
+    <h1 class="mb-1 text-lg font-semibold text-slate-900">Meu perfil</h1>
+    <p class="mb-6 text-sm text-slate-500">
+        Esse nome aparece pra outras pessoas (ex.: como "Responsável" num chamado) — nunca o e-mail.
+    </p>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <form method="post">
+            {% csrf_token %}
+            {% include "partials/form_fields.html" %}
+            <button type="submit"
+                class="w-full rounded-md bg-slate-900 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2">
+                Salvar
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
