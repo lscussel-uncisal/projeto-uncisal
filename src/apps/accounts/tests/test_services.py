@@ -1,7 +1,7 @@
 import pytest
 
 from apps.accounts.models import LoginAttempt, User
-from apps.accounts.services import LoginThrottleService
+from apps.accounts.services import LoginThrottleService, PasswordResetThrottleService
 
 
 @pytest.mark.django_db
@@ -65,5 +65,51 @@ class TestLoginThrottleService:
 
         assert (
             LoginThrottleService.is_locked_out(attempted_username="ok", ip_address="1.1.1.1")
+            is False
+        )
+
+
+@pytest.mark.django_db
+class TestPasswordResetThrottleService:
+    def test_not_locked_out_with_no_requests(self):
+        assert (
+            PasswordResetThrottleService.is_locked_out(
+                email="ninguem@example.com", ip_address="1.2.3.4"
+            )
+            is False
+        )
+
+    def test_locks_out_after_threshold_requests_for_same_email(self):
+        for _ in range(PasswordResetThrottleService.THRESHOLD_PER_EMAIL):
+            PasswordResetThrottleService.record(email="vitima@example.com", ip_address="1.2.3.4")
+
+        assert (
+            PasswordResetThrottleService.is_locked_out(
+                email="vitima@example.com", ip_address="9.9.9.9"
+            )
+            is True
+        )
+
+    def test_locks_out_by_ip_when_spraying_multiple_emails(self):
+        for i in range(PasswordResetThrottleService.THRESHOLD_PER_IP):
+            PasswordResetThrottleService.record(
+                email=f"conta-{i}@example.com", ip_address="6.6.6.6"
+            )
+
+        assert (
+            PasswordResetThrottleService.is_locked_out(
+                email="conta-nova@example.com", ip_address="6.6.6.6"
+            )
+            is True
+        )
+
+    def test_does_not_share_lockout_with_login_throttle(self):
+        # Pedidos de recuperacao de senha nao devem contar para o throttle de LOGIN do
+        # mesmo identificador — sao riscos/acoes diferentes (ver ADR).
+        for _ in range(PasswordResetThrottleService.THRESHOLD_PER_EMAIL):
+            PasswordResetThrottleService.record(email="joao@example.com", ip_address="1.2.3.4")
+
+        assert (
+            LoginThrottleService.is_locked_out(attempted_username="joao", ip_address="9.9.9.9")
             is False
         )

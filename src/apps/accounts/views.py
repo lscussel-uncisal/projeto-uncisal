@@ -8,16 +8,25 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
+from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import FormView
+from django.views.generic import FormView, TemplateView
 
 from apps.accounts.forms import (
+    PasswordChangeForm,
+    PasswordResetRequestForm,
     TurnstileAuthenticationForm,
     TwoFactorCodeForm,
     TwoFactorMethodForm,
 )
 from apps.accounts.models import LoginAttempt, TwoFactorDevice, TwoFactorMethod, User
-from apps.accounts.services import LoginThrottleService, TwoFactorService, client_ip
+from apps.accounts.services import (
+    AccountNotificationService,
+    LoginThrottleService,
+    PasswordResetThrottleService,
+    TwoFactorService,
+    client_ip,
+)
 
 # Chaves de sessao do CADASTRO de segundo fator (auto-servico, usuario ja autenticado) —
 # namespace separado das chaves 2FA_* do login pendente acima, para nunca colidir caso o
@@ -98,6 +107,9 @@ class ThrottledLoginView(auth_views.LoginView):
 
             return redirect("accounts:two_factor_verify")
 
+        AccountNotificationService.send_login_notification(
+            user=user, ip_address=client_ip(self.request)
+        )
         return super().form_valid(form)
 
     def form_invalid(self, form):
@@ -168,6 +180,9 @@ class TwoFactorVerifyView(FormView):
             attempted_username=self.pending_user.get_username(),
             user=self.pending_user,
             ip_address=client_ip(self.request),
+        )
+        AccountNotificationService.send_login_notification(
+            user=self.pending_user, ip_address=client_ip(self.request)
         )
         return redirect(next_url)
 
@@ -310,3 +325,65 @@ class TwoFactorConfirmSetupView(LoginRequiredMixin, FormView):
         if timezone.now() > datetime.fromisoformat(expires_raw):
             return False
         return compare_digest(TwoFactorService.hash_code(code), expected_hash)
+
+
+class PasswordResetRequestView(FormView):
+    """Pedido de recuperação de senha: só e-mail + Turnstile.
+
+    A resposta é SEMPRE a mesma — exista conta com esse e-mail ou não, esteja throttled
+    ou não — nunca revela nada sobre a existência da conta (ver ADR em
+    docs/architecture/decisions.md). Por isso não há form_invalid especial nem branch de
+    "e-mail não encontrado": tudo cai no mesmo redirect de sucesso.
+    """
+
+    template_name = "accounts/password_reset_request.html"
+    form_class = PasswordResetRequestForm
+    success_url = reverse_lazy("accounts:password_reset_done")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["turnstile_enabled"] = settings.TURNSTILE_ENABLED
+        context["turnstile_site_key"] = settings.TURNSTILE_SITE_KEY
+        return context
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
+
+    def form_valid(self, form):
+        email = form.cleaned_data["email"]
+        ip = client_ip(self.request)
+
+        if not PasswordResetThrottleService.is_locked_out(email=email, ip_address=ip):
+            PasswordResetThrottleService.record(email=email, ip_address=ip)
+            user = User.objects.filter(email__iexact=email, is_active=True).first()
+            if user is not None:
+                temp_password = AccountNotificationService.generate_temp_password()
+                # So efetiva a senha nova DEPOIS de confirmar que o e-mail saiu — senao um
+                # SMTP fora do ar trocaria a senha real sem o usuario nunca saber qual e a nova.
+                if AccountNotificationService.send_temp_password(
+                    user=user, temp_password=temp_password
+                ):
+                    user.set_password(temp_password)
+                    user.save(update_fields=["password"])
+
+        return super().form_valid(form)
+
+
+class PasswordResetDoneView(TemplateView):
+    template_name = "accounts/password_reset_done.html"
+
+
+class AccountPasswordChangeView(auth_views.PasswordChangeView):
+    """Troca de senha self-service — exige a senha atual (Django cuida disso). Acessível
+    pelo usuário já logado, sem precisar do admin."""
+
+    template_name = "accounts/password_change.html"
+    form_class = PasswordChangeForm
+    success_url = reverse_lazy("tickets:list")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Senha alterada com sucesso.")
+        return response

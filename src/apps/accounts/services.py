@@ -2,6 +2,7 @@ import base64
 import hashlib
 import logging
 import secrets
+import string
 from datetime import timedelta
 from io import BytesIO
 
@@ -103,6 +104,100 @@ class LoginThrottleService:
                 return True
 
         return False
+
+
+class PasswordResetThrottleService:
+    """Contenção de abuso no pedido de recuperação de senha (por e-mail digitado e por IP).
+
+    Deliberadamente INDEPENDENTE do LoginThrottleService — pedir recuperação de senha não
+    deve contar para o throttle de LOGIN do mesmo identificador, nem vice-versa; são ações
+    com riscos diferentes (ver docs/architecture/decisions.md).
+    """
+
+    WINDOW = timedelta(minutes=15)
+    THRESHOLD_PER_EMAIL = 3
+    THRESHOLD_PER_IP = 10
+
+    @classmethod
+    def record(cls, *, email: str, ip_address: str | None = None) -> LoginAttempt:
+        return LoginAttempt.objects.create(
+            attempted_username=email,
+            result=LoginAttempt.Result.PASSWORD_RESET_REQUESTED,
+            ip_address=ip_address,
+        )
+
+    @classmethod
+    def is_locked_out(cls, *, email: str, ip_address: str | None) -> bool:
+        since = timezone.now() - cls.WINDOW
+        recent = LoginAttempt.objects.filter(
+            created_at__gte=since, result=LoginAttempt.Result.PASSWORD_RESET_REQUESTED
+        )
+
+        by_email = recent.filter(attempted_username__iexact=email).count()
+        if by_email >= cls.THRESHOLD_PER_EMAIL:
+            return True
+
+        if ip_address:
+            by_ip = recent.filter(ip_address=ip_address).count()
+            if by_ip >= cls.THRESHOLD_PER_IP:
+                return True
+
+        return False
+
+
+class AccountNotificationService:
+    """E-mails de notificação de conta que não são específicos de 2FA (login bem-sucedido,
+    senha temporária de recuperação) — mantido separado de TwoFactorService por SRP: um
+    cuida do segundo fator, o outro de notificações gerais da conta."""
+
+    @classmethod
+    def generate_temp_password(cls) -> str:
+        alphabet = string.ascii_letters + string.digits
+        return "-".join("".join(secrets.choice(alphabet) for _ in range(5)) for _ in range(3))
+
+    @classmethod
+    def send_login_notification(cls, *, user: User, ip_address: str | None) -> None:
+        # Melhor esforço, como send_wrong_code_alert: o login já aconteceu, uma falha aqui
+        # não pode virar erro pro usuário.
+        origem = f" a partir do IP {ip_address}" if ip_address else ""
+        try:
+            send_mail(
+                subject=f"{settings.OTP_ISSUER_NAME} - Novo login na sua conta",
+                message=(
+                    f"Detectamos um novo login bem-sucedido na conta "
+                    f"'{user.get_username()}'{origem}.\n\n"
+                    "Se foi você, pode ignorar este e-mail.\n\n"
+                    "Se não foi você, troque sua senha imediatamente em "
+                    "'Segurança da conta' → 'Trocar senha'."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+        except OSError:
+            logger.error("Falha ao enviar notificação de login", exc_info=True)
+
+    @classmethod
+    def send_temp_password(cls, *, user: User, temp_password: str) -> bool:
+        """True se o e-mail foi enviado. Quem chama SÓ deve efetivar a senha temporária
+        (user.set_password) depois de confirmar que este método retornou True — senão um
+        SMTP fora do ar trocaria a senha real do usuário sem ele nunca saber qual é a nova."""
+        try:
+            send_mail(
+                subject=f"{settings.OTP_ISSUER_NAME} - Recuperação de senha",
+                message=(
+                    f"Sua senha temporária é: {temp_password}\n\n"
+                    "Use-a para entrar. Recomendamos fortemente trocar essa senha assim que "
+                    "acessar — vá em 'Segurança da conta' → 'Trocar senha' no menu.\n\n"
+                    "Se você não pediu essa recuperação, entre em contato com o administrador "
+                    "imediatamente — essa senha temporária já substituiu a sua."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+        except OSError:
+            logger.error("Falha ao enviar senha temporária", exc_info=True)
+            return False
+        return True
 
 
 class TwoFactorService:

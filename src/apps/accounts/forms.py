@@ -1,31 +1,54 @@
 from django import forms
 from django.conf import settings
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import PasswordChangeForm as DjangoPasswordChangeForm
 from django.core.exceptions import ValidationError
 
 from apps.accounts.services import TurnstileService, client_ip
 from apps.core.forms import TailwindStyledFormMixin
 
 
-class TurnstileAuthenticationForm(TailwindStyledFormMixin, AuthenticationForm):
-    """AuthenticationForm padrao do Django + verificacao do Cloudflare Turnstile.
-
-    Turnstile e checado ANTES das credenciais (falha rapido em trafego automatizado,
-    sem gastar um authenticate() nele, e nao revela se a senha estaria certa ou nao).
-    So verifica de fato quando settings.TURNSTILE_ENABLED (ver ADR-009) — em dev, sem
-    chave configurada, o formulario se comporta como um AuthenticationForm normal.
+class TurnstileProtectedFormMixin:
+    """Checa o Cloudflare Turnstile ANTES do resto da validacao do formulario (falha rapido
+    em trafego automatizado, sem gastar autenticacao/consulta ao banco nele). So verifica de
+    fato quando settings.TURNSTILE_ENABLED (ver ADR-009) — em dev, sem chave configurada, o
+    formulario se comporta normalmente. O Form precisa receber `request` no __init__ (ver
+    TurnstileAuthenticationForm — AuthenticationForm já faz isso; PasswordResetRequestForm
+    aceita explicitamente).
     """
 
     def clean(self):
         if settings.TURNSTILE_ENABLED:
             token = self.data.get("cf-turnstile-response", "")
-            remote_ip = client_ip(self.request) if self.request else None
+            remote_ip = client_ip(self.request) if getattr(self, "request", None) else None
             if not TurnstileService.verify(token, remote_ip=remote_ip):
                 raise ValidationError(
                     "Verificação de segurança falhou. Recarregue a página e tente novamente.",
                     code="turnstile_invalid",
                 )
         return super().clean()
+
+
+class TurnstileAuthenticationForm(
+    TurnstileProtectedFormMixin, TailwindStyledFormMixin, AuthenticationForm
+):
+    """AuthenticationForm padrao do Django + verificacao do Cloudflare Turnstile — checada
+    ANTES das credenciais, sem revelar se a senha estaria certa ou nao."""
+
+
+class PasswordResetRequestForm(TurnstileProtectedFormMixin, TailwindStyledFormMixin, forms.Form):
+    """Pedido de recuperação de senha: só o e-mail + Turnstile. A view NUNCA revela se o
+    e-mail existe ou não — a resposta é sempre a mesma, exista conta ou não (ver ADR)."""
+
+    email = forms.EmailField(label="E-mail")
+
+    def __init__(self, *args, request=None, **kwargs):
+        self.request = request
+        super().__init__(*args, **kwargs)
+
+
+class PasswordChangeForm(TailwindStyledFormMixin, DjangoPasswordChangeForm):
+    """PasswordChangeForm padrao do Django (exige a senha atual) + estilo Tailwind."""
 
 
 class TwoFactorCodeForm(TailwindStyledFormMixin, forms.Form):
