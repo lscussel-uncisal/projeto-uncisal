@@ -153,7 +153,8 @@ obrigatórias + 2 bônus já implementadas:
 - [x] Aplicação no ar com IP público / domínio (`uncisal.lserpsistemas.com.br`)
 - [x] HTTPS via Certbot com redirecionamento automático
 - [x] Testes SSL/TLS aprovados (Qualys, com PQC) — nota A+ nos 4 endpoints (IPv4/IPv6), PQC Key
-      Exchange confirmado (`X25519MLKEM768`) em 2026-09-22
+      Exchange confirmado (`X25519MLKEM768`) em 2026-09-22 — print em
+      [`docs/security/evidencias/qualys-ssl-report-2026-09-22.png`](docs/security/evidencias/qualys-ssl-report-2026-09-22.png)
 - [x] SSH por chave + Fail2Ban configurado — `PasswordAuthentication no`, `PermitRootLogin no`,
       5 jails ativos, auditoria de menor privilégio confirmada (ADR-032)
 - [x] Repositório público, `.gitignore` correto, sem segredos expostos — hooks `gitleaks` +

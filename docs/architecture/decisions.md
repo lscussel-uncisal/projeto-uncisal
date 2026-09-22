@@ -672,7 +672,9 @@ completo quando isso acontece (nao da pra saber qual dos dois confiar). Corrigid
 Nginx tudo que o Django ja manda via `prod.py`, deixando lá so o que o Django nao cobre por
 padrao (`Content-Security-Policy`, `Permissions-Policy`). **Resultado apos a correcao: nota A+
 nos 4 endpoints** (Cloudflare testa IPv4 e IPv6 separadamente) — confirma HSTS valido, forward
-secrecy completo, sem Heartbleed/POODLE/BEAST.
+secrecy completo, sem Heartbleed/POODLE/BEAST. Print do relatório re-confirmado em 2026-09-22
+(mesmo resultado, A+ nos 4 endpoints) em
+`docs/security/evidencias/qualys-ssl-report-2026-09-22.png`.
 
 ## ADR-028 — Duas classes de bug de UI em producao: CSP bloqueando `onclick` e Tailwind "cego" pro Python
 
