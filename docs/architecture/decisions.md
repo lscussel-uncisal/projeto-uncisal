@@ -269,6 +269,14 @@ implementa explica o *o que mudou*, no mesmo vocabulario.
 
 ## ADR-015 — Instancia Oracle Cloud: Ampere A1 (ARM), Dockerfile multi-arquitetura
 
+> **Atualização (ver ADR-016 logo abaixo):** esta era a recomendação no momento do
+> planejamento, antes do provisionamento real. Na hora de criar a instância de verdade, a
+> capacidade de Ampere A1 na região usada (`sa-saopaulo-1`) estava esgotada — a instância que
+> roda em produção hoje é `VM.Standard.E2.1.Micro` (AMD/x86), não a A1 recomendada aqui. A
+> decisão registrada abaixo (Dockerfile multi-arquitetura via `ARG TARGETARCH`) continua sendo
+> exatamente o motivo de o fallback para AMD ter sido indolor — a imagem já buildava certo nas
+> duas arquiteturas antes mesmo de saber qual delas ia sobrar.
+
 **Contexto:** ao escrever o manual de provisionamento (`docs/infra/oracle-cloud-setup.md`), duas
 shapes Always Free estavam disponiveis: `VM.Standard.E2.1.Micro` (AMD/x86, 1 OCPU, 1 GB RAM) ou
 `VM.Standard.A1.Flex` (Ampere/ARM, ate 4 OCPUs e 24 GB RAM no total da conta).
