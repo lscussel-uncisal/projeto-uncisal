@@ -336,3 +336,116 @@ class TestTicketUpdateView:
 
         assert "suporte@example.com" not in response.content.decode()
         assert "Maria Souza" in response.content.decode()
+
+
+@pytest.mark.django_db
+class TestTicketFullLifecycle:
+    """Ponta a ponta: abertura -> triagem -> andamento -> resolução -> fechamento, do jeito
+    que acontece de verdade (usuário abre, suporte assume, muda status até o fim) — não só
+    regras isoladas de permissão testadas em separado (essas já existem acima)."""
+
+    def test_open_to_in_progress_to_resolved_to_closed(self, client):
+        owner = User.objects.create_user(username="owner@example.com", password="senha-forte-123")
+        support = User.objects.create_user(
+            username="suporte@example.com", password="senha-forte-123", role=Role.SUPPORT
+        )
+
+        # 1. Usuário abre o chamado.
+        client.force_login(owner)
+        response = client.post(
+            reverse("tickets:create"),
+            {"title": "Impressora não liga", "description": "Sem energia.", "priority": "high"},
+        )
+        assert response.status_code == 302
+        ticket = Ticket.objects.get()
+        assert ticket.status == Status.OPEN
+        assert ticket.requester == owner
+        assert ticket.assignee is None
+
+        # Aparece na lista e no detalhe do próprio dono, com o link de editar (ainda Aberto).
+        list_response = client.get(reverse("tickets:list"))
+        assert ticket.pk in list_response.context["editable_ticket_ids"]
+        detail_response = client.get(reverse("tickets:detail", args=[ticket.pk]))
+        assert detail_response.status_code == 200
+        assert detail_response.context["can_edit"] is True
+
+        # 2. Dono ainda edita enquanto está Aberto (título/descrição, nunca status/assignee).
+        response = client.post(
+            reverse("tickets:update", args=[ticket.pk]),
+            {"title": "Impressora não liga (urgente)", "description": "Sem energia."},
+        )
+        assert response.status_code == 302
+        ticket.refresh_from_db()
+        assert ticket.title == "Impressora não liga (urgente)"
+        assert ticket.status == Status.OPEN
+
+        # 3. Suporte assume e move para Em andamento.
+        client.force_login(support)
+        response = client.post(
+            reverse("tickets:update", args=[ticket.pk]),
+            {
+                "title": ticket.title,
+                "description": ticket.description,
+                "status": Status.IN_PROGRESS,
+                "priority": "high",
+                "assignee": support.pk,
+            },
+        )
+        assert response.status_code == 302
+        ticket.refresh_from_db()
+        assert ticket.status == Status.IN_PROGRESS
+        assert ticket.assignee == support
+
+        # Dono ainda VÊ o chamado e quem está cuidando, mas não edita mais (não é mais Aberto).
+        client.force_login(owner)
+        detail_response = client.get(reverse("tickets:detail", args=[ticket.pk]))
+        assert detail_response.status_code == 200
+        assert detail_response.context["can_edit"] is False
+        assert support.display_name in detail_response.content.decode()
+
+        response = client.post(
+            reverse("tickets:update", args=[ticket.pk]),
+            {"title": "tentando editar mesmo assim", "description": "..."},
+        )
+        assert response.status_code == 403
+        ticket.refresh_from_db()
+        assert ticket.title != "tentando editar mesmo assim"
+
+        # 4. Suporte resolve.
+        client.force_login(support)
+        response = client.post(
+            reverse("tickets:update", args=[ticket.pk]),
+            {
+                "title": ticket.title,
+                "description": ticket.description,
+                "status": Status.RESOLVED,
+                "priority": "high",
+                "assignee": support.pk,
+            },
+        )
+        assert response.status_code == 302
+        ticket.refresh_from_db()
+        assert ticket.status == Status.RESOLVED
+
+        # 5. Suporte fecha o chamado.
+        response = client.post(
+            reverse("tickets:update", args=[ticket.pk]),
+            {
+                "title": ticket.title,
+                "description": ticket.description,
+                "status": Status.CLOSED,
+                "priority": "high",
+                "assignee": support.pk,
+            },
+        )
+        assert response.status_code == 302
+        ticket.refresh_from_db()
+        assert ticket.status == Status.CLOSED
+
+        # Dono continua vendo o chamado fechado na lista e no detalhe (nunca some).
+        client.force_login(owner)
+        list_response = client.get(reverse("tickets:list"))
+        assert ticket in list_response.context["tickets"]
+        detail_response = client.get(reverse("tickets:detail", args=[ticket.pk]))
+        assert detail_response.status_code == 200
+        assert "Fechado" in detail_response.content.decode()
