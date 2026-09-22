@@ -93,7 +93,15 @@ class TestBackupRunNowView:
         assert BackupRun.objects.count() == 1
         assert BackupRun.objects.first().status == BackupRun.Status.FAILED
 
+    @pytest.mark.django_db(transaction=True)
     def test_admin_triggering_a_successful_backup(self, client, settings):
+        # transaction=True (em vez do django_db padrão da classe, que embrulha o teste numa
+        # transação nunca commitada): essa view chama BackupService._snapshot_database, que
+        # abre uma conexão sqlite3 própria pro MESMO arquivo — com a transação da classe de
+        # teste aberta, essa segunda conexão trava esperando lock (nunca solta, porque a
+        # transação de teste nunca commita). Com transaction=True o Django usa commit/reset
+        # de verdade entre testes, sem segurar transação aberta, igual ao comportamento real
+        # em produção (que roda em autocommit fora de atomic()).
         from cryptography.fernet import Fernet
 
         settings.R2_ACCOUNT_ID = "acc123"

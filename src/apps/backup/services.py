@@ -34,7 +34,15 @@ class BackupService:
     @staticmethod
     def _snapshot_database(destination: Path) -> None:
         """sqlite3 .backup nativo — consistente mesmo com o banco em uso (ao contrário de
-        copiar o arquivo direto, que pode capturar uma escrita no meio do caminho)."""
+        copiar o arquivo direto, que pode capturar uma escrita no meio do caminho).
+
+        Abre uma conexão própria, separada da conexão do Django, de propósito: reaproveitar
+        `connection.connection` (a conexão que o Django já tem aberta) trava esperando lock
+        quando essa conexão está no meio de uma transação — em produção isso é raro (Django
+        roda em autocommit fora de `atomic()`), mas nos testes (`@pytest.mark.django_db`
+        embrulha cada teste numa transação nunca commitada) é garantido. Ver
+        TestBackupRunNowView.test_admin_triggering_a_successful_backup, que usa
+        `django_db(transaction=True)` justamente para não segurar essa transação aberta."""
         source = sqlite3.connect(connection.settings_dict["NAME"])
         dest = sqlite3.connect(str(destination))
         with dest:
