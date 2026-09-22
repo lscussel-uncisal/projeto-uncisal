@@ -18,48 +18,28 @@
 | A09 | Security Logging and Alerting Failures |
 | A10 | Mishandling of Exceptional Conditions |
 
-## Análise de custo/benefício para este projeto
+## As 5 categorias escolhidas — status: implementadas e documentadas
 
-| Categoria | Custo de implementação | Por quê |
+> Decisão final tomada e fechada (não é mais uma análise de custo prévia à implementação — as
+> 5 abaixo estão implementadas, testadas e copiadas para a tabela do `README.md`).
+
+| Categoria | Onde | Como |
 |---|---|---|
-| **A01 — Broken Access Control** | Zero (já construído) | RBAC via `apps/accounts/permissions.py` (`role_required`) e `apps/tickets/services.py` (`TicketService.visible_to`) — autorização sempre checada no backend, nunca confiando em dado do cliente. Hierarquia de papéis (super-admin > admin > suporte > usuário, `apps/accounts/models.py Role`) com prevenção explícita de escalonamento de privilégio: `UserCreateForm.clean_role` + `UserAdminService.creatable_roles` rejeitam um admin tentando criar/forjar uma conta super-admin mesmo via POST direto (não só escondendo a opção no formulário), e `UserAdminService.visible_to` faz admin comum receber 404 (nunca 403, pra não nem confirmar a existência da conta) ao tentar listar ou agir sobre uma conta super-admin. |
-| **A09 — Security Logging and Alerting Failures** | Zero a baixo (já construído) | `apps/accounts/models.py` (`LoginAttempt`) já audita tentativas de login/2FA/recuperação de senha, inclusive contra e-mails inexistentes (detecção de enumeração); alerta por e-mail em 2FA incorreto e em todo login bem-sucedido (`AccountNotificationService`). Auditoria consultável via tela "Relatório de login" (`LoginReportView`), restrita a admin/super-admin. |
-| **A05 — Injection** | Zero (decorrência do stack) | Django ORM elimina SQL injection por padrão (sem `raw()`/string interpolation); autoescape de template elimina XSS refletido (sem `\|safe` em input de usuário). Só precisa documentar a prática, nenhum código novo. |
-| **A04 — Cryptographic Failures** | Baixo (~15 min) | Trocar hasher padrão por Argon2id (`pip install argon2-cffi`, 1a posição em `PASSWORD_HASHERS`); `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`/HSTS já estão em `prod.py`. |
-| **A02 — Security Misconfiguration** | Baixo (já em boa parte construído) | `DEBUG=False`, headers de segurança e `SECRET_KEY` fail-fast já em `prod.py`; falta só documentar. |
-| **A07 — Authentication Failures** | Concluído | 2FA (TOTP/e-mail, `TwoFactorService`) + Turnstile + *rate limiting* no login e na verificação de 2FA (`LoginThrottleService`, cobre `INVALID_CREDENTIALS` e `INVALID_2FA` pelo mesmo mecanismo) — sem isso, o código de 6 dígitos seria atacável por força bruta. É o coração da aplicação. |
-| **A10 — Mishandling of Exceptional Conditions** | Médio | Páginas customizadas de erro (404/500, sem stack trace) + `try/except` ao redor das chamadas externas (verificação do Turnstile, envio de e-mail via SMTP) para não vazar detalhe interno em caso de falha de rede/API. |
-| A03 — Software Supply Chain Failures | Baixo, mas cosmético | Já coberto por `.github/dependabot.yml`. Poderia render mais com `pip-audit` no CI, mas o ganho de narrativa é menor que os itens acima. |
-| A06 — Insecure Design | Alto para o retorno | Sobrepõe muito com A01 na prática; documentar como categoria separada exigiria uma narrativa de design mais abstrata sem código novo claramente associado. |
-| A08 — Software or Data Integrity Failures | Alto para o retorno | Exigiria assinatura de commits, pin de digest de imagem Docker, pin de SHA das GitHub Actions — esforço real para um ganho de relatório pequeno neste escopo. |
+| **A01 — Broken Access Control** | `apps/accounts/permissions.py` (`role_required`), `apps/tickets/services.py`/`apps/accounts/services.py` (`UserAdminService`) | RBAC sempre checado no backend, nunca em dado do cliente. Hierarquia de papéis (super-admin > admin > suporte > usuário) com prevenção explícita de escalonamento de privilégio: `UserCreateForm.clean_role` + `UserAdminService.creatable_roles` rejeitam um admin tentando criar/forjar uma conta super-admin mesmo via POST direto (não só escondendo a opção no formulário), e `UserAdminService.visible_to` faz admin comum receber 404 (nunca 403, pra não nem confirmar a existência da conta) ao tentar agir sobre uma conta super-admin. |
+| **A07 — Authentication Failures** | `apps/accounts/services.py` (`TwoFactorService`, `LoginThrottleService`, `TurnstileService`) | 2FA (TOTP/e-mail) + Cloudflare Turnstile + *rate limiting* no login e na verificação do código 2FA (`LoginThrottleService`, cobre `INVALID_CREDENTIALS` e `INVALID_2FA` pelo mesmo mecanismo) — sem isso, o código de 6 dígitos seria atacável por força bruta. |
+| **A09 — Security Logging and Alerting Failures** | `apps/accounts/models.py` (`LoginAttempt`), tela "Relatório de login" (`LoginReportView`) | Auditoria de toda tentativa de login/2FA/recuperação de senha, inclusive contra e-mails inexistentes (detecção de enumeração); alerta por e-mail em login bem-sucedido e em código 2FA incorreto (`AccountNotificationService`). Consultável, restrita a admin/super-admin. |
+| **A05 — Injection** | ORM do Django (todo o projeto), autoescape de template | Nenhum `.raw()`/SQL com string interpolada em código de aplicação; nenhum `\|safe`/`mark_safe` em conteúdo de usuário — verificado ao vivo com payload de script numa descrição de chamado, sai escapado (`&lt;script&gt;...`), nunca executa. |
+| **A04 — Cryptographic Failures** | `config/settings/base.py` (`PASSWORD_HASHERS`), `apps/core/fields.py` (`EncryptedCharField`), `apps/backup/services.py` | Argon2id como hasher de senha (1ª posição em `PASSWORD_HASHERS`); segredo TOTP e backup do banco cifrados em repouso, cada um com sua própria chave Fernet dedicada (nunca reaproveitada entre os dois); `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`/HSTS em `prod.py`. |
 
-## Recomendação
+## As 5 descartadas — e por quê
 
-**As 3 obrigatórias:** A01 (Broken Access Control), A07 (Authentication Failures) e A09 (Security
-Logging and Alerting Failures) — são as que mais se encaixam na identidade do projeto (chamados +
-RBAC + 2FA com alerta) e a maior parte já está ou estará construída de qualquer forma.
+Analisadas e conscientemente deixadas de fora (não são "esquecidas" — o retorno de documentá-las
+como categoria separada não compensava o esforço, dado o que as 5 acima já cobrem):
 
-**Bônus quase gratuito, se quiser passar de 3:** A05 (Injection) e A04 (Cryptographic Failures) —
-custo somado de menos de meia hora, e mostram maturidade extra para uma avaliação de pós em
-segurança.
-
-## Pendente
-
-- [x] Implementar rate limiting em login (`LoginThrottleService` + `ThrottledLoginView`)
-- [x] Trocar hasher para Argon2id
-- [x] Páginas de erro customizadas (403/404/500), sem stack trace
-- [x] Cloudflare Turnstile integrado no login (`TurnstileService`, `TurnstileAuthenticationForm`),
-      com `try/except` ao redor da chamada HTTP (falha fechado, nunca expõe o motivo real)
-- [x] Parede de 2FA (TOTP + e-mail) com alerta por e-mail em código incorreto
-      (`TwoFactorService`, `ThrottledLoginView`/`TwoFactorVerifyView`)
-- [x] Rate limiting específico na etapa de verificação do código 2FA — reaproveita o mesmo
-      `LoginThrottleService` (já contava `INVALID_2FA`, só faltava a tela chamá-lo)
-- [x] `try/except` ao redor do envio de e-mail (`TwoFactorService.send_email_code`/
-      `send_wrong_code_alert`, falha fechado — nunca deixa a exceção virar 500)
-- [x] Confirmar com o usuário o conjunto final (3 ou 5 categorias) — 5 (A01, A07, A09 + A05, A04)
-- [x] Apontar arquivo/linha exata de cada mitigação após a implementação
-- [x] Copiar o resumo final para a tabela do `README.md` (2026-09-22)
-
-Dado o volume já implementado, o conjunto final recomendado passa a ser 5 categorias:
-**A01, A07, A09** (núcleo) + **A05, A04** (bônus já concluído/quase gratuito) — ver
-`docs/security/risk-matrix.md` para o quadro de risco completo por trás dessa escolha.
+| Categoria | Por que ficou de fora |
+|---|---|
+| A02 — Security Misconfiguration | Sobrepõe com A04 na prática (`DEBUG=False`, headers de segurança e `SECRET_KEY` fail-fast já cobertos ali). |
+| A03 — Software Supply Chain Failures | Já coberto por `.github/dependabot.yml` + `pip-audit` no CI — mitigado, mas documentar como 6ª categoria não agregava narrativa nova. |
+| A06 — Insecure Design | Sobrepõe muito com A01 na prática; separá-la exigiria uma narrativa de design mais abstrata sem código novo claramente associado. |
+| A08 — Software or Data Integrity Failures | Exigiria assinatura de commits, pin de digest de imagem Docker, pin de SHA das GitHub Actions — esforço real para um ganho de relatório pequeno neste escopo. |
+| A10 — Mishandling of Exceptional Conditions | Também implementado na prática (páginas de erro customizadas + `try/except` ao redor de Turnstile/SMTP), mas não entrou nas 5 "oficiais" por já haver 5 mais centrais à identidade do projeto (chamados + RBAC + 2FA). |
