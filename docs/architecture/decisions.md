@@ -816,3 +816,44 @@ ignorado), mas as duas chaves foram recomendadas para rotação por precaução 
 registrado em `docs/project/status-e-pendencias.md` para o incidente anterior de mesma natureza.
 Validar sintaxe de compose sem `config` (ex.: `docker compose config --quiet` teria o mesmo
 problema — o comando em si sempre resolve variáveis; a forma segura é revisão visual do YAML).
+
+## ADR-031 — Backup configurado em produção: bucket R2, token restrito, e onde o projeto realmente mora no servidor
+
+**Contexto:** fechar o R10 de verdade (não só no código) exigia criar o bucket R2 e configurar
+o `ENV_FILE`. Duas coisas não óbvias apareceram durante essa configuração, vale registrar pra
+não redescobrir do zero da próxima vez.
+
+**1. Bucket e token do R2 — decisões tomadas:**
+- Bucket `bkp-uncisal` (hífen, não underscore — nomes de bucket no R2 seguem a mesma regra do
+  S3: só letras minúsculas, números e hífen), criado com "Public Access: Disabled" (padrão do
+  R2, não precisou desligar nada).
+- Token do tipo **Account API Token**, não User API Token — a própria Cloudflare recomenda isso
+  pra "production systems": um User API Token fica atrelado à conta pessoal de quem criou e
+  para de funcionar se essa pessoa perder acesso à organização; o job de backup automatizado não
+  pode depender disso.
+- Permissão **Object Read & Write**, escopo restrito só ao bucket `bkp-uncisal` (nunca "Apply to
+  all buckets").
+- **Client IP Address Filtering** restringindo o token ao IP fixo do servidor
+  (`163.176.75.32`, reservado — ver `docs/infra/oracle-cloud-setup.md`) — camada extra sem custo
+  nenhum: o token nunca precisa ser usado de outro lugar, então mesmo que a Secret Access Key
+  vazasse no futuro, não daria pra usá-la fora do próprio servidor.
+
+**2. O projeto não mora na pasta do usuário `ubuntu` no servidor:** existe um usuário Linux
+dedicado, `deploy` (ver ADR-016), criado só pra rodar o `git pull`/`docker compose` do GitHub
+Actions — o projeto vive em `/home/deploy/helpdesk`, não em `/home/ubuntu/...`. Uma sessão SSH
+manual usando a chave pessoal (`uncisal_oracle`) conecta como `ubuntu`, cujo home não tem
+`helpdesk` nenhum — `ls -la ~`/`find ~` retornam vazio, o que pareceu (por um momento) que o
+projeto tinha sumido do servidor. Não sumiu: `ubuntu` tem sudo, então
+`sudo cat /home/deploy/helpdesk/.env` (ou qualquer comando com `sudo` apontando pra esse
+caminho) resolve. Vale deixar claro em qualquer instrução futura de acesso manual ao servidor.
+
+**3. 502 momentâneo durante o `docker compose up -d --build` é esperado, não é falha:** ao
+reaplicar o deploy pra pegar um `.env` atualizado, a aplicação respondeu `502` por alguns
+segundos — o container antigo já tinha parado e o novo ainda não passou no healthcheck. Log do
+container confirmou boot normal (migrações, coleta de estático, gunicorn com os 3 workers
+subindo); um novo `curl` ~1 minuto depois já respondia `200`. Não é motivo de pânico nem de
+investigação mais funda, desde que o log não mostre erro de verdade.
+
+**Validado**: backup manual disparado via Administração → Backup → "Backup agora" concluído com
+sucesso em produção em 2026-09-22 (ver R10, `risk-matrix.md`). Teste de restauração de verdade
+ainda pendente (ver `docs/project/status-e-pendencias.md`).

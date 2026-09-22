@@ -6,10 +6,14 @@ chamados e contas cadastradas.
 
 ## Status
 
-🟡 Implementado no código (`apps/backup`, ver ADR-030) — falta só configurar as 6 variáveis de
-ambiente do R2 em produção (ver "Como habilitar" abaixo) para o job agendado e o botão "Backup
-agora" passarem a funcionar de verdade. Sem elas, `settings.BACKUP_ENABLED = False` e a tela
-mostra um aviso — não quebra o resto da aplicação (mesmo padrão do Turnstile).
+✅ Implementado e configurado em produção (`apps/backup`, ver ADR-030). Bucket privado
+`bkp-uncisal` no Cloudflare R2, criado com "Public Access: Disabled"; token de API do tipo
+**Account API Token** (não fica preso a nenhuma conta de pessoa), permissão só **Object Read &
+Write**, escopo restrito a esse bucket, e **filtrado por IP** (só aceita requisições vindas do
+IP fixo do servidor, `163.176.75.32`) — mesmo que a credencial vazasse, não daria pra usá-la de
+outro lugar. Testado com sucesso via botão "Backup agora" (Administração → Backup) em
+2026-09-22. Sem as variáveis de ambiente configuradas, `settings.BACKUP_ENABLED = False` e a
+tela mostra um aviso — não quebra o resto da aplicação (mesmo padrão do Turnstile).
 
 ## O que é salvo
 
