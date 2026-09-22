@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Relatório de login · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-xl font-semibold text-slate-900">Relatório de login</h1>
+    <p class="text-sm text-slate-500">Auditoria de tentativas de autenticação, inclusive de e-mails inexistentes.</p>
+</div>
+
+<form method="get" class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div>
+        <label for="result" class="mb-1 block text-xs font-medium text-slate-600">Resultado</label>
+        <select id="result" name="result"
+            class="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+            <option value="">Todos</option>
+            {% for value, label in result_choices %}
+                <option value="{{ value }}" {% if value == selected_result %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="date_from" class="mb-1 block text-xs font-medium text-slate-600">De</label>
+        <input type="date" id="date_from" name="date_from" value="{{ date_from }}"
+            class="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+    </div>
+    <div>
+        <label for="date_to" class="mb-1 block text-xs font-medium text-slate-600">Até</label>
+        <input type="date" id="date_to" name="date_to" value="{{ date_to }}"
+            class="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+    </div>
+    <button type="submit"
+        class="rounded-md bg-slate-100 px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-200">
+        Filtrar
+    </button>
+    {% if selected_result or date_from or date_to %}
+        <a href="{% url 'accounts:login_report' %}" class="text-sm text-slate-500 hover:text-slate-700 hover:underline">
+            Limpar filtros
+        </a>
+    {% endif %}
+</form>
+
+<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    {% for attempt in attempts %}
+        <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-4 last:border-b-0">
+            <div class="min-w-0">
+                <p class="truncate font-medium text-slate-900">{{ attempt.attempted_username }}</p>
+                <p class="text-sm text-slate-500">{{ attempt.created_at|date:"d/m/Y H:i" }} · IP {{ attempt.ip_address|default:"desconhecido" }}</p>
+            </div>
+            <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                {% if attempt.result == 'success' %}bg-green-50 text-green-700
+                {% elif attempt.result == 'password_reset_requested' %}bg-blue-50 text-blue-700
+                {% else %}bg-red-50 text-red-700{% endif %}">
+                {{ attempt.get_result_display }}
+            </span>
+        </div>
+    {% empty %}
+        <div class="p-10 text-center">
+            <p class="text-sm text-slate-500">Nenhuma tentativa encontrada.</p>
+        </div>
+    {% endfor %}
+</div>
+
+{% if is_paginated %}
+    <div class="mt-4 flex items-center justify-between text-sm text-slate-600">
+        <div>
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if selected_result %}&result={{ selected_result }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+                    class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
+                    Anterior
+                </a>
+            {% endif %}
+        </div>
+        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if selected_result %}&result={{ selected_result }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+                    class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
+                    Próxima
+                </a>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

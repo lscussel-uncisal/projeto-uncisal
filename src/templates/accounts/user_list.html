@@ -2,9 +2,15 @@
 {% block title %}Usuários · Central de Chamados{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-    <h1 class="text-xl font-semibold text-slate-900">Usuários</h1>
-    <p class="text-sm text-slate-500">Ativar/desativar afeta login e recuperação de senha imediatamente.</p>
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-semibold text-slate-900">Usuários</h1>
+        <p class="text-sm text-slate-500">Ativar/desativar afeta login e recuperação de senha imediatamente.</p>
+    </div>
+    <a href="{% url 'accounts:user_create' %}"
+        class="shrink-0 rounded-md bg-slate-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
+        + Novo usuário
+    </a>
 </div>
 
 <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

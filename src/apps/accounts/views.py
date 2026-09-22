@@ -13,7 +13,7 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_POST
-from django.views.generic import FormView, ListView, TemplateView, UpdateView
+from django.views.generic import CreateView, FormView, ListView, TemplateView, UpdateView
 
 from apps.accounts.forms import (
     PasswordChangeForm,
@@ -22,6 +22,7 @@ from apps.accounts.forms import (
     TurnstileAuthenticationForm,
     TwoFactorCodeForm,
     TwoFactorMethodForm,
+    UserCreateForm,
 )
 from apps.accounts.models import LoginAttempt, Role, TwoFactorDevice, TwoFactorMethod, User
 from apps.accounts.permissions import role_required
@@ -425,6 +426,59 @@ class UserListView(ListView):
 
     def get_queryset(self):
         return User.objects.all().order_by("username")
+
+
+@method_decorator(role_required(Role.ADMIN), name="dispatch")
+class UserCreateView(CreateView):
+    """Criação de usuário por um admin — protegida no servidor pelo mesmo role_required de
+    UserListView. Nunca define senha aqui (ver UserCreateForm.save)."""
+
+    model = User
+    form_class = UserCreateForm
+    template_name = "accounts/user_form.html"
+    success_url = reverse_lazy("accounts:user_list")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        AccountNotificationService.send_welcome_email(user=self.object)
+        messages.success(self.request, f"{self.object.display_name} foi cadastrado(a).")
+        return response
+
+
+@method_decorator(role_required(Role.ADMIN), name="dispatch")
+class LoginReportView(ListView):
+    """Auditoria de tentativas de login (sucesso, falha, 2FA incorreto, recuperação de senha
+    solicitada) — mesma proteção server-side das outras telas de administração."""
+
+    model = LoginAttempt
+    template_name = "accounts/login_report.html"
+    context_object_name = "attempts"
+    paginate_by = 30
+
+    def get_queryset(self):
+        queryset = LoginAttempt.objects.select_related("user").order_by("-created_at")
+
+        result = self.request.GET.get("result")
+        if result in LoginAttempt.Result.values:
+            queryset = queryset.filter(result=result)
+
+        date_from = self.request.GET.get("date_from")
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+
+        date_to = self.request.GET.get("date_to")
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["result_choices"] = LoginAttempt.Result.choices
+        context["selected_result"] = self.request.GET.get("result", "")
+        context["date_from"] = self.request.GET.get("date_from", "")
+        context["date_to"] = self.request.GET.get("date_to", "")
+        return context
 
 
 @role_required(Role.ADMIN)

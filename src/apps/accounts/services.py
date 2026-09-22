@@ -199,6 +199,28 @@ class AccountNotificationService:
             return False
         return True
 
+    @classmethod
+    def send_welcome_email(cls, *, user: User) -> None:
+        """Conta nova criada por um admin nasce com set_unusable_password() (ver
+        UserCreateForm) — nunca uma senha provisória gerada aqui, pra reaproveitar 100% do
+        fluxo já testado de 'Esqueci minha senha' em vez de duplicar geração/transmissão de
+        senha em outro lugar. Melhor esforço: se o e-mail falhar, a conta já existe mesmo
+        assim (o admin pode reenviar avisando o usuário por outro canal)."""
+        try:
+            send_mail(
+                subject=f"{settings.OTP_ISSUER_NAME} - Sua conta foi criada",
+                message=(
+                    f"Uma conta foi criada para você em {settings.OTP_ISSUER_NAME}, com o "
+                    f"e-mail '{user.email}'.\n\n"
+                    "Para definir sua senha de acesso, use a opção 'Esqueci minha senha' na "
+                    "tela de login, informando este e-mail."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+        except OSError:
+            logger.error("Falha ao enviar e-mail de boas-vindas", exc_info=True)
+
 
 class TwoFactorService:
     """Segundo fator de autenticacao: TOTP (app autenticador) ou codigo por e-mail.

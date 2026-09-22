@@ -3,6 +3,7 @@ from django.urls import path
 
 from apps.accounts.views import (
     AccountPasswordChangeView,
+    LoginReportView,
     PasswordResetDoneView,
     PasswordResetRequestView,
     ProfileUpdateView,
@@ -10,6 +11,7 @@ from apps.accounts.views import (
     TwoFactorConfirmSetupView,
     TwoFactorSetupView,
     TwoFactorVerifyView,
+    UserCreateView,
     UserListView,
     user_toggle_active,
 )
@@ -27,5 +29,7 @@ urlpatterns = [
     path("recuperar-senha/", PasswordResetRequestView.as_view(), name="password_reset_request"),
     path("recuperar-senha/enviado/", PasswordResetDoneView.as_view(), name="password_reset_done"),
     path("usuarios/", UserListView.as_view(), name="user_list"),
+    path("usuarios/novo/", UserCreateView.as_view(), name="user_create"),
     path("usuarios/<int:pk>/alternar-ativo/", user_toggle_active, name="user_toggle_active"),
+    path("relatorio-login/", LoginReportView.as_view(), name="login_report"),
 ]

@@ -63,6 +63,34 @@ class ProfileForm(TailwindStyledFormMixin, forms.ModelForm):
         labels = {"first_name": "Nome", "last_name": "Sobrenome"}
 
 
+class UserCreateForm(TailwindStyledFormMixin, forms.ModelForm):
+    """Criação de usuário por um admin. Nasce com set_unusable_password() — nunca uma senha
+    definida aqui (nem gerada nem digitada pelo admin): o próprio usuário define a senha via
+    'Esqueci minha senha' (ver AccountNotificationService.send_welcome_email), reaproveitando
+    o fluxo já existente em vez de duplicar geração/transmissão de senha."""
+
+    email = forms.EmailField(label="E-mail (também será o nome de usuário para login)")
+
+    class Meta:
+        model = User
+        fields = ["email", "first_name", "last_name", "role"]
+        labels = {"first_name": "Nome", "last_name": "Sobrenome", "role": "Papel"}
+
+    def clean_email(self):
+        email = self.cleaned_data["email"]
+        if User.objects.filter(username__iexact=email).exists():
+            raise ValidationError("Já existe uma conta com esse e-mail.", code="duplicate_email")
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.username = self.cleaned_data["email"]
+        user.set_unusable_password()
+        if commit:
+            user.save()
+        return user
+
+
 class TwoFactorCodeForm(TailwindStyledFormMixin, forms.Form):
     """Formulario generico de codigo de 6 digitos — usado tanto no login (TOTP/e-mail)
     quanto na confirmacao de configuracao do segundo fator."""
