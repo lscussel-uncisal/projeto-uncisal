@@ -33,6 +33,21 @@ class User(AbstractUser):
     def is_support_role(self) -> bool:
         return self.role == Role.SUPPORT
 
+    @property
+    def display_name(self) -> str:
+        """Nome amigável pra exibir a outros usuários (ex.: campo 'Responsável' de um chamado).
+
+        Nunca retorna o e-mail: username == e-mail neste projeto, e e-mail é credencial de
+        login — expor pra qualquer usuário autenticado facilita phishing/engenharia social
+        direcionada à equipe de suporte. Sem nome/sobrenome cadastrado, cai pro identificador
+        local do e-mail (antes do @), nunca o endereço inteiro.
+        """
+        full_name = self.get_full_name()
+        return full_name if full_name else self.username.split("@")[0]
+
+    def __str__(self) -> str:
+        return self.display_name
+
 
 class TwoFactorMethod(models.TextChoices):
     TOTP = "totp", "Aplicativo autenticador"
@@ -66,6 +81,7 @@ class LoginAttempt(TimeStampedModel):
         SUCCESS = "success", "Sucesso"
         INVALID_CREDENTIALS = "invalid_credentials", "Credenciais inválidas"
         INVALID_2FA = "invalid_2fa", "Código 2FA inválido"
+        PASSWORD_RESET_REQUESTED = "password_reset_requested", "Recuperação de senha solicitada"
 
     user = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="login_attempts"

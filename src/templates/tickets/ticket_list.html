@@ -10,9 +10,42 @@
     </a>
 </div>
 
+<form method="get" class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div>
+        <label for="status" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
+        <select id="status" name="status"
+            class="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+            <option value="">Todos</option>
+            {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if value == selected_status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="date_from" class="mb-1 block text-xs font-medium text-slate-600">De</label>
+        <input type="date" id="date_from" name="date_from" value="{{ date_from }}"
+            class="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+    </div>
+    <div>
+        <label for="date_to" class="mb-1 block text-xs font-medium text-slate-600">Até</label>
+        <input type="date" id="date_to" name="date_to" value="{{ date_to }}"
+            class="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+    </div>
+    <button type="submit"
+        class="rounded-md bg-slate-100 px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-200">
+        Filtrar
+    </button>
+    {% if selected_status or date_from or date_to %}
+        <a href="{% url 'tickets:list' %}" class="text-sm text-slate-500 hover:text-slate-700 hover:underline">
+            Limpar filtros
+        </a>
+    {% endif %}
+</form>
+
 <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
     {% for ticket in tickets %}
-        <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-4 last:border-b-0 hover:bg-slate-50">
+        <a href="{% url 'tickets:detail' ticket.pk %}"
+            class="flex items-center justify-between gap-4 border-b border-slate-100 p-4 last:border-b-0 hover:bg-slate-50">
             <div class="min-w-0">
                 <p class="truncate font-medium text-slate-900">{{ ticket.title }}</p>
                 <p class="text-sm text-slate-500">
@@ -31,12 +64,10 @@
                     {{ ticket.get_status_display }}
                 </span>
                 {% if ticket.pk in editable_ticket_ids %}
-                    <a href="{% url 'tickets:update' ticket.pk %}" class="text-sm text-slate-600 hover:text-slate-900 hover:underline">
-                        Editar
-                    </a>
+                    <span class="text-sm text-slate-600">Editar</span>
                 {% endif %}
             </div>
-        </div>
+        </a>
     {% empty %}
         <div class="p-10 text-center">
             <p class="text-sm text-slate-500">Nenhum chamado encontrado.</p>
@@ -46,4 +77,26 @@
         </div>
     {% endfor %}
 </div>
+
+{% if is_paginated %}
+    <div class="mt-4 flex items-center justify-between text-sm text-slate-600">
+        <div>
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+                    class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
+                    Anterior
+                </a>
+            {% endif %}
+        </div>
+        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+                    class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
+                    Próxima
+                </a>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
 {% endblock %}

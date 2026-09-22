@@ -24,3 +24,28 @@ class TestUser:
         user = User.objects.create_user(username="maria", password="senha-forte-123")
 
         assert user.is_two_factor_enabled is False
+
+    def test_display_name_uses_full_name_when_set(self):
+        user = User.objects.create_user(
+            username="joao@example.com",
+            password="senha-forte-123",
+            first_name="João",
+            last_name="Silva",
+        )
+
+        assert user.display_name == "João Silva"
+
+    def test_display_name_falls_back_to_local_part_of_username_never_full_email(self):
+        user = User.objects.create_user(
+            username="joao.silva@example.com", password="senha-forte-123"
+        )
+
+        assert user.display_name == "joao.silva"
+        assert "@" not in user.display_name
+        assert "example.com" not in user.display_name
+
+    def test_str_never_exposes_the_email(self):
+        user = User.objects.create_user(username="joao@example.com", password="senha-forte-123")
+
+        assert str(user) == "joao"
+        assert "@" not in str(user)

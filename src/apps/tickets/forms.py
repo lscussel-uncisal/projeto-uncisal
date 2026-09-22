@@ -23,9 +23,21 @@ class TicketUserUpdateForm(TailwindStyledFormMixin, forms.ModelForm):
         fields = ["title", "description"]
 
 
+class StaffModelChoiceField(forms.ModelChoiceField):
+    """Mostra o nome do agente (User.display_name), nunca o e-mail — e-mail é credencial,
+    não dado pra expor a quem está sendo atendido."""
+
+    def label_from_instance(self, obj: User) -> str:
+        return obj.display_name
+
+
 class TicketStaffUpdateForm(TailwindStyledFormMixin, forms.ModelForm):
     """Edição por admin/suporte: todos os campos, incluindo triagem (status, prioridade,
     responsável)."""
+
+    assignee = StaffModelChoiceField(
+        queryset=User.objects.none(), required=False, label="Responsável"
+    )
 
     class Meta:
         model = Ticket

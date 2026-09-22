@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ ticket.title }} · Central de Chamados{% endblock %}
+
+{% block content %}
+<a href="{% url 'tickets:list' %}" class="mb-4 inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 hover:underline">
+    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/></svg>
+    Voltar para chamados
+</a>
+
+<div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div class="mb-4 flex items-start justify-between gap-4">
+        <div>
+            <h1 class="text-lg font-semibold text-slate-900">{{ ticket.title }}</h1>
+            <p class="text-sm text-slate-500">Chamado #{{ ticket.pk }} · aberto em {{ ticket.created_at|date:"d/m/Y H:i" }}</p>
+        </div>
+        {% if can_edit %}
+            <a href="{% url 'tickets:update' ticket.pk %}"
+                class="shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50">
+                Editar
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="mb-5 flex flex-wrap gap-2">
+        <span class="rounded-full px-2.5 py-1 text-xs font-medium
+            {% if ticket.status == 'open' %}bg-blue-50 text-blue-700
+            {% elif ticket.status == 'in_progress' %}bg-amber-50 text-amber-700
+            {% elif ticket.status == 'resolved' %}bg-green-50 text-green-700
+            {% else %}bg-slate-100 text-slate-600{% endif %}">
+            {{ ticket.get_status_display }}
+        </span>
+        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium
+            {% if ticket.priority == 'high' %}text-red-600{% elif ticket.priority == 'medium' %}text-amber-600{% else %}text-slate-600{% endif %}">
+            Prioridade {{ ticket.get_priority_display }}
+        </span>
+    </div>
+
+    <div class="mb-5">
+        <h2 class="mb-1 text-sm font-medium text-slate-700">Descrição</h2>
+        <p class="whitespace-pre-line text-sm text-slate-600">{{ ticket.description }}</p>
+    </div>
+
+    <dl class="grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 text-sm sm:grid-cols-2">
+        <div>
+            <dt class="text-slate-500">Solicitante</dt>
+            <dd class="font-medium text-slate-900">{{ ticket.requester.display_name }}</dd>
+        </div>
+        <div>
+            <dt class="text-slate-500">Responsável</dt>
+            <dd class="font-medium text-slate-900">{{ ticket.assignee.display_name|default:"Ainda não atribuído" }}</dd>
+        </div>
+        <div>
+            <dt class="text-slate-500">Última atualização</dt>
+            <dd class="font-medium text-slate-900">{{ ticket.updated_at|date:"d/m/Y H:i" }}</dd>
+        </div>
+    </dl>
+</div>
+{% endblock %}
