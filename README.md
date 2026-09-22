@@ -143,11 +143,11 @@ obrigatórias + 2 bônus já implementadas:
 
 | Categoria OWASP | Onde é mitigada | Como |
 |---|---|---|
-| **A01 — Broken Access Control** | `apps/accounts/permissions.py` (`role_required`), `apps/tickets/services.py`/`apps/accounts/services.py` (`UserAdminService`) | RBAC sempre checado no backend, nunca em dado do cliente. Hierarquia de papéis (super-admin > admin > suporte > usuário) com prevenção explícita de escalonamento — admin não cria nem vê conta super-admin, mesmo forjando a requisição direto |
-| **A07 — Authentication Failures** | `apps/accounts/services.py` (`TwoFactorService`, `LoginThrottleService`, `TurnstileService`) | 2FA (TOTP/e-mail) + Cloudflare Turnstile + *rate limiting* no login e na verificação do código 2FA |
-| **A09 — Security Logging and Alerting Failures** | `apps/accounts/models.py` (`LoginAttempt`), tela "Relatório de login" | Auditoria de toda tentativa de login/2FA/recuperação de senha, inclusive contra e-mails inexistentes (detecção de enumeração); alerta por e-mail em login bem-sucedido e em código 2FA incorreto |
-| **A05 — Injection** | ORM do Django (todo o projeto), autoescape de template | Nenhum `.raw()`/SQL com string interpolada; nenhum `\|safe`/`mark_safe` em conteúdo de usuário — verificado ao vivo com payload de script numa descrição de chamado, sai escapado |
-| **A04 — Cryptographic Failures** | `config/settings/base.py` (`PASSWORD_HASHERS`), `apps/core/fields.py` (`EncryptedCharField`), `apps/backup/services.py` | Argon2id como hasher de senha; segredo TOTP e backup do banco cifrados em repouso, cada um com sua própria chave Fernet dedicada |
+| **A01 — Broken Access Control** (Quebra de Controle de Acesso) | `apps/accounts/permissions.py` (`role_required`), `apps/tickets/services.py`/`apps/accounts/services.py` (`UserAdminService`) | RBAC sempre checado no backend, nunca em dado do cliente. Hierarquia de papéis (super-admin > admin > suporte > usuário) com prevenção explícita de escalonamento — admin não cria nem vê conta super-admin, mesmo forjando a requisição direto |
+| **A07 — Authentication Failures** (Falhas de Autenticação) | `apps/accounts/services.py` (`TwoFactorService`, `LoginThrottleService`, `TurnstileService`) | 2FA (TOTP/e-mail) + Cloudflare Turnstile + *rate limiting* no login e na verificação do código 2FA |
+| **A09 — Security Logging and Alerting Failures** (Falhas de Registro e Alerta de Segurança) | `apps/accounts/models.py` (`LoginAttempt`), tela "Relatório de login" | Auditoria de toda tentativa de login/2FA/recuperação de senha, inclusive contra e-mails inexistentes (detecção de enumeração); alerta por e-mail em login bem-sucedido e em código 2FA incorreto |
+| **A05 — Injection** (Injeção) | ORM do Django (todo o projeto), autoescape de template | Nenhum `.raw()`/SQL com string interpolada; nenhum `\|safe`/`mark_safe` em conteúdo de usuário — verificado ao vivo com payload de script numa descrição de chamado, sai escapado |
+| **A04 — Cryptographic Failures** (Falhas Criptográficas) | `config/settings/base.py` (`PASSWORD_HASHERS`), `apps/core/fields.py` (`EncryptedCharField`), `apps/backup/services.py` | Argon2id como hasher de senha; segredo TOTP e backup do banco cifrados em repouso, cada um com sua própria chave Fernet dedicada |
 
 ## Checklist de entrega
 
