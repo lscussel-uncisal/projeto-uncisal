@@ -146,11 +146,14 @@ Decisões de arquitetura registradas em [`docs/architecture/decisions.md`](docs/
 
 ## Checklist de entrega
 
-- [ ] Aplicação no ar com IP público / domínio (`uncisal.lserpsistemas.com.br`)
-- [ ] HTTPS via Certbot com redirecionamento automático
-- [ ] Testes SSL/TLS aprovados (Qualys, com PQC)
-- [ ] SSH por chave + Fail2Ban configurado
-- [ ] Repositório público, `.gitignore` correto, sem segredos expostos
-- [ ] Login, página interna autenticada e logout funcionais
-- [ ] 3 mitigações OWASP documentadas
-- [ ] Pipeline CI/CD automatizado via GitHub Actions
+- [x] Aplicação no ar com IP público / domínio (`uncisal.lserpsistemas.com.br`)
+- [x] HTTPS via Certbot com redirecionamento automático
+- [x] Testes SSL/TLS aprovados (Qualys, com PQC) — nota A+ nos 4 endpoints (IPv4/IPv6), PQC Key
+      Exchange confirmado (`X25519MLKEM768`) em 2026-09-22
+- [x] SSH por chave + Fail2Ban configurado — `PasswordAuthentication no`, `PermitRootLogin no`,
+      5 jails ativos, auditoria de menor privilégio confirmada (ADR-032)
+- [x] Repositório público, `.gitignore` correto, sem segredos expostos — hooks `gitleaks` +
+      `detect-private-key` no pre-commit
+- [x] Login, página interna autenticada e logout funcionais
+- [x] 3 mitigações OWASP documentadas — `docs/security/owasp-mitigations.md` (5 categorias)
+- [x] Pipeline CI/CD automatizado via GitHub Actions

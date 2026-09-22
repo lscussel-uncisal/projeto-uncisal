@@ -33,7 +33,11 @@ class TestBackupStatusView:
 
         assert response.status_code == 403
 
-    def test_admin_can_view_the_status_page(self, client):
+    def test_admin_can_view_the_status_page_when_backup_is_not_configured(self, client, settings):
+        # Forca o estado desabilitado explicitamente (nao confia no ambiente local nao ter
+        # as variaveis do R2 no .env — um .env de dev com credenciais reais de teste, por
+        # exemplo, faria esse teste mentir sobre o que esta sendo verificado).
+        settings.BACKUP_ENABLED = False
         admin = User.objects.create_user(
             username="admin@example.com", password="senha-forte-123", role=Role.ADMIN
         )
@@ -81,7 +85,10 @@ class TestBackupRunNowView:
 
         assert response.status_code == 405
 
-    def test_admin_triggering_it_without_r2_configured_records_a_failed_run(self, client):
+    def test_admin_triggering_it_without_r2_configured_records_a_failed_run(self, client, settings):
+        # Forca explicitamente, mesma razao do teste em TestBackupStatusView: nao confiar que o
+        # .env local do ambiente de dev nao tem credenciais reais do R2 configuradas.
+        settings.BACKUP_ENABLED = False
         admin = User.objects.create_user(
             username="admin@example.com", password="senha-forte-123", role=Role.ADMIN
         )

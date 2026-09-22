@@ -26,35 +26,14 @@ Atualizado em: 2026-09-22.
 | CSS quebrado em produção (CSP bloqueando `onclick` inline; Docker "cego" pra classe Tailwind construída em Python) | ADR-028 |
 | Telas próprias de gestão de usuários (criar/listar/ativar-desativar) e relatório de login, sem depender do Django Admin | ADR-029 |
 | Hierarquia de papéis com super-admin, prevenção de escalonamento de privilégio (admin nunca cria super-admin, nem forjando POST) | ADR-029 |
-| Backup completo (SQLite nativo + Fernet + Cloudflare R2), agendado + botão manual, fecha o R10 — configurado e testado com sucesso em produção em 2026-09-22 | ADR-030, `docs/security/backup-recovery.md`, `docs/security/risk-matrix.md` (R10) |
+| Backup completo (SQLite nativo + Fernet + Cloudflare R2), agendado + botão manual, fecha o R10 — configurado e testado com sucesso em produção, **incluindo restauração de teste real**, em 2026-09-22 | ADR-030, ADR-031, `docs/security/backup-recovery.md`, `docs/security/risk-matrix.md` (R10) |
 | Manual de estudos + roteiro de apresentação (vídeo de 5–10 min) | Arquivo **local, fora do repositório de propósito** (não versionado/publicado — repo é público): `docs/apresentacao-uncisal.md`, listado no `.gitignore`. Entregue ao usuário. |
+| Papel do avaliador promovido para Admin (via `role_required`, sem tocar Django Admin) | ADR-029; e-mail da conta nunca registrado no repositório, por instrução explícita do usuário |
+| Auditoria final de menor privilégio (UFW, iptables, Fail2Ban, SSH, serviços do sistema) — achado e corrigido: `rpcbind` escutando desnecessariamente em `0.0.0.0:111` | ADR-032 |
+| 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — fecha R11 | `docs/security/risk-matrix.md` (R11) |
+| Rotação de `EMAIL_HOST_PASSWORD`/`TURNSTILE_SECRET_KEY` — risco avaliado e aceito conscientemente pelo dono do projeto, não rotacionado | ADR-030 (decisão registrada com data e justificativa) |
 
 ## O que falta
 
-Ordenado pela sequência já combinada. Cada item tem a spec mínima pra implementar sem re-perguntar
-o óbvio — mas **checar com o usuário antes de qualquer decisão que não esteja aqui**.
-
-### 1. Fazer uma restauração de teste do backup
-
-- O botão "Backup agora" confirmou que o envio pro R2 funciona (ver R10 em `risk-matrix.md`),
-  mas ainda não foi feita nenhuma restauração de teste de verdade — comando pronto em
-  "Teste de restauração", `docs/security/backup-recovery.md`. Backup que nunca foi restaurado em
-  teste é só uma suposição, não uma garantia.
-
-### 2. Rotacionar dois segredos (precaução, não comprometimento confirmado)
-
-- `EMAIL_HOST_PASSWORD` e `TURNSTILE_SECRET_KEY` apareceram em texto puro nesta conversa por
-  causa de um `docker compose config` rodado por engano (ver ADR-030, achado final) — mesmo
-  protocolo do incidente anterior de mesma natureza (ver item abaixo). Gerar nova senha de app
-  no Gmail e nova secret key no painel da Cloudflare, atualizar `ENV_FILE`.
-
-### 3. Housekeeping pequeno, sem pressa
-
-- Confirmar 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — R11.
-- Apagar `prod.env` da pasta temporária de scratch depois que os GitHub Secrets forem conferidos
-  (já cumpriu a função, não precisa persistir).
-- Renomear/apagar o arquivo órfão `/etc/iptables/rules.v4` no servidor (ver ADR-026) — hoje
-  inofensivo (nada mais o recarrega), mas fica limpo remover de vez. Bloqueado pelo classificador
-  de segurança do Claude Code quando tentei via SSH; precisa ser o usuário a rodar:
-  `sudo mv /etc/iptables/rules.v4 /etc/iptables/rules.v4.disabled`.
-
+Nada crítico pendente pra entrega. Checklist de entrega do `README.md` conferido item a item —
+ver seção correspondente lá.

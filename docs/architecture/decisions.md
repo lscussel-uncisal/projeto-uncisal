@@ -817,6 +817,15 @@ registrado em `docs/project/status-e-pendencias.md` para o incidente anterior de
 Validar sintaxe de compose sem `config` (ex.: `docker compose config --quiet` teria o mesmo
 problema — o comando em si sempre resolve variáveis; a forma segura é revisão visual do YAML).
 
+**Decisão do usuário (2026-09-22): rotação recusada, risco aceito conscientemente.** Avaliação
+explícita do dono do projeto: a exposição ficou restrita ao histórico de uma conversa privada
+(não a um canal público nem ao repositório), o projeto não guarda dado sensível de terceiros
+(contas de teste, sem dado real de produção institucional), e o projeto será desativado num
+horizonte próximo — o custo de rotacionar (gerar nova senha de app no Gmail, nova secret key na
+Cloudflare, atualizar `ENV_FILE`, redeploy) supera o benefício residual nesse contexto específico.
+Registrado aqui para não repetir a recomendação sem necessidade, e pra deixar claro que é uma
+decisão tomada, com trade-off explícito — não um lapso ou algo esquecido.
+
 ## ADR-031 — Backup configurado em produção: bucket R2, token restrito, e onde o projeto realmente mora no servidor
 
 **Contexto:** fechar o R10 de verdade (não só no código) exigia criar o bucket R2 e configurar
@@ -855,5 +864,50 @@ subindo); um novo `curl` ~1 minuto depois já respondia `200`. Não é motivo de
 investigação mais funda, desde que o log não mostre erro de verdade.
 
 **Validado**: backup manual disparado via Administração → Backup → "Backup agora" concluído com
-sucesso em produção em 2026-09-22 (ver R10, `risk-matrix.md`). Teste de restauração de verdade
-ainda pendente (ver `docs/project/status-e-pendencias.md`).
+sucesso em produção em 2026-09-22 (ver R10, `risk-matrix.md`). **Restauração de teste também
+concluída** no mesmo dia: script rodado dentro do próprio container (`docker exec -i
+docker-web-1 python manage.py shell`, reaproveitando `BackupService._r2_client()` e as
+credenciais já configuradas) baixou o objeto mais recente do R2, descriptografou com a chave
+Fernet, e confirmou (a) assinatura de arquivo SQLite válida e (b) contagem de linhas nas tabelas
+principais batendo com o esperado (`accounts_user`, `tickets_ticket`,
+`accounts_loginattempt`). Prova real de reversibilidade, não suposição — sem nunca precisar
+mover a chave de criptografia nem a credencial do R2 pra fora do ambiente onde já estavam
+configuradas.
+
+## ADR-032 — Auditoria final de menor privilégio antes da entrega
+
+**Contexto:** antes de considerar o projeto pronto pra avaliação, checagem completa e explícita
+do princípio "negar tudo por padrão, liberar só o necessário" — não só confiar que cada peça
+individual estava certa, mas revisar o estado real do servidor de uma vez.
+
+**Checado (tudo somente leitura, sem alterar nada até o achado abaixo):**
+- `ufw status verbose`: `Default: deny (incoming), allow (outgoing), deny (routed)` — 80/443
+  restritos aos ranges publicados da Cloudflare (IPv4 e IPv6); 22/tcp aberto para qualquer
+  origem, decisão consciente (ver abaixo).
+- `iptables -L INPUT`: `policy DROP`, confirma o mesmo princípio numa camada abaixo do UFW.
+- `/etc/iptables/rules.v4.disabled`: confirmado que o arquivo órfão (ADR-026) está renomeado,
+  sem nada carregando.
+- `fail2ban-client status`: 5 jails ativos (sshd, recidive, 3 de Nginx).
+- `sshd_config`: `PermitRootLogin no`, `PasswordAuthentication no`.
+- Containers: `docker-web-1` só em `127.0.0.1:8000` (nunca exposto externamente),
+  `docker-backup-1` sem nenhuma porta publicada pro host.
+
+**Achado real, corrigido:** `ss -tlnp` mostrou `rpcbind` escutando em `0.0.0.0:111` (todas as
+interfaces) — serviço de RPC/NFS que vem habilitado por padrão no Ubuntu, mas que este projeto
+não usa em nenhum ponto. O UFW já bloqueava acesso externo a essa porta (não está na lista de
+liberadas), então não era explorável — mas rodar um serviço desnecessário viola o princípio de
+menor privilégio no nível de *serviço*, não só de firewall: um docente auditando o servidor
+notaria um processo ativo sem função no projeto. Corrigido com
+`systemctl disable --now rpcbind.socket rpcbind.service` (precisou desabilitar o `.socket` além
+do `.service` — o socket reativa o serviço sob demanda mesmo com o service desabilitado sozinho).
+Confirmado depois: porta 111 não aparece mais em `ss -tlnp`.
+
+**Sobre 22/tcp aberto pra "Anywhere" (a única regra não restrita a um range específico):**
+decisão consciente, não uma exceção esquecida. Acesso administrativo por SSH precisa ser
+alcançável de onde quer que o administrador esteja — travar num IP fixo arriscaria um lockout.
+A mitigação padrão da indústria pra esse trade-off, já em prática aqui: autenticação só por
+chave (nunca senha), sem login de root, e Fail2Ban banindo automaticamente tentativas repetidas
+(já baniu um IP minutos depois do servidor ficar público — ver ADR-016).
+
+**Resultado**: nenhuma outra porta/serviço desnecessário encontrado. Auditoria concluída em
+2026-09-22.
