@@ -47,3 +47,6 @@ Thumbs.db
 
 # --- Docker ---
 docker/nginx/certs/
+
+# --- Material de apresentação (local, nunca publicado — repo é público) ---
+docs/apresentacao-uncisal.md
