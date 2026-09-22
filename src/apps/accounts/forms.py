@@ -4,8 +4,8 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.forms import PasswordChangeForm as DjangoPasswordChangeForm
 from django.core.exceptions import ValidationError
 
-from apps.accounts.models import User
-from apps.accounts.services import TurnstileService, client_ip
+from apps.accounts.models import Role, User
+from apps.accounts.services import TurnstileService, UserAdminService, client_ip
 from apps.core.forms import TailwindStyledFormMixin
 
 
@@ -64,10 +64,14 @@ class ProfileForm(TailwindStyledFormMixin, forms.ModelForm):
 
 
 class UserCreateForm(TailwindStyledFormMixin, forms.ModelForm):
-    """Criação de usuário por um admin. Nasce com set_unusable_password() — nunca uma senha
-    definida aqui (nem gerada nem digitada pelo admin): o próprio usuário define a senha via
-    'Esqueci minha senha' (ver AccountNotificationService.send_welcome_email), reaproveitando
-    o fluxo já existente em vez de duplicar geração/transmissão de senha."""
+    """Criação de usuário por um admin ou super-admin. Nasce com set_unusable_password() —
+    nunca uma senha definida aqui (nem gerada nem digitada por quem cria): o próprio usuário
+    define a senha via 'Esqueci minha senha' (ver AccountNotificationService.send_welcome_email),
+    reaproveitando o fluxo já existente em vez de duplicar geração/transmissão de senha.
+
+    Recebe `actor` (quem está criando) pra restringir os papéis que podem ser atribuídos —
+    tanto escondendo do dropdown quanto rejeitando em clean_role, pra nunca depender só da
+    UI: um admin nunca pode criar super-admin, nem forjando o POST diretamente."""
 
     email = forms.EmailField(label="E-mail (também será o nome de usuário para login)")
 
@@ -76,11 +80,28 @@ class UserCreateForm(TailwindStyledFormMixin, forms.ModelForm):
         fields = ["email", "first_name", "last_name", "role"]
         labels = {"first_name": "Nome", "last_name": "Sobrenome", "role": "Papel"}
 
+    def __init__(self, *args, actor=None, **kwargs):
+        self.actor = actor
+        super().__init__(*args, **kwargs)
+        allowed = UserAdminService.creatable_roles(actor) if actor else set()
+        self.fields["role"].choices = [
+            (value, label) for value, label in Role.choices if value in allowed
+        ]
+
     def clean_email(self):
         email = self.cleaned_data["email"]
         if User.objects.filter(username__iexact=email).exists():
             raise ValidationError("Já existe uma conta com esse e-mail.", code="duplicate_email")
         return email
+
+    def clean_role(self):
+        role = self.cleaned_data.get("role")
+        allowed = UserAdminService.creatable_roles(self.actor) if self.actor else set()
+        if role not in allowed:
+            raise ValidationError(
+                "Você não tem permissão para atribuir esse papel.", code="role_not_allowed"
+            )
+        return role
 
     def save(self, commit=True):
         user = super().save(commit=False)

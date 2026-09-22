@@ -6,6 +6,7 @@ from apps.core.models import TimeStampedModel
 
 
 class Role(models.TextChoices):
+    SUPER_ADMIN = "super_admin", "Super Administrador"
     ADMIN = "admin", "Administrador"
     SUPPORT = "support", "Suporte"
     USER = "user", "Usuário"
@@ -24,6 +25,10 @@ class User(AbstractUser):
             "'Segurança da conta' após o primeiro login (aplicativo autenticador ou e-mail)."
         ),
     )
+
+    @property
+    def is_super_admin_role(self) -> bool:
+        return self.role == Role.SUPER_ADMIN
 
     @property
     def is_admin_role(self) -> bool:

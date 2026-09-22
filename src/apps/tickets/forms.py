@@ -45,5 +45,7 @@ class TicketStaffUpdateForm(TailwindStyledFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # So pode atribuir chamado a quem de fato atende chamado (admin/suporte).
-        self.fields["assignee"].queryset = User.objects.filter(role__in=[Role.ADMIN, Role.SUPPORT])
+        # So pode atribuir chamado a quem de fato atende chamado (super-admin/admin/suporte).
+        self.fields["assignee"].queryset = User.objects.filter(
+            role__in=[Role.SUPER_ADMIN, Role.ADMIN, Role.SUPPORT]
+        )

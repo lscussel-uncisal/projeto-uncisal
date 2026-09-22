@@ -415,28 +415,36 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
         return response
 
 
-@method_decorator(role_required(Role.ADMIN), name="dispatch")
+@method_decorator(role_required(Role.ADMIN, Role.SUPER_ADMIN), name="dispatch")
 class UserListView(ListView):
     """Gestão de usuários (ativar/desativar). Protegida no servidor por role_required —
-    quem não for Role.ADMIN recebe 403 mesmo sabendo a URL, não é só um link escondido."""
+    quem não for admin/super-admin recebe 403 mesmo sabendo a URL, não é só um link
+    escondido. Admin comum nunca vê conta super-admin (ver UserAdminService.visible_to)."""
 
     model = User
     template_name = "accounts/user_list.html"
     context_object_name = "users"
 
     def get_queryset(self):
-        return User.objects.all().order_by("username")
+        return UserAdminService.visible_to(self.request.user)
 
 
-@method_decorator(role_required(Role.ADMIN), name="dispatch")
+@method_decorator(role_required(Role.ADMIN, Role.SUPER_ADMIN), name="dispatch")
 class UserCreateView(CreateView):
-    """Criação de usuário por um admin — protegida no servidor pelo mesmo role_required de
-    UserListView. Nunca define senha aqui (ver UserCreateForm.save)."""
+    """Criação de usuário por um admin ou super-admin — protegida no servidor pelo mesmo
+    role_required de UserListView. Nunca define senha aqui (ver UserCreateForm.save). Papel
+    atribuível é restringido por quem está criando (ver UserCreateForm/UserAdminService) —
+    admin nunca cria super-admin, nem forjando o POST."""
 
     model = User
     form_class = UserCreateForm
     template_name = "accounts/user_form.html"
     success_url = reverse_lazy("accounts:user_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["actor"] = self.request.user
+        return kwargs
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -445,7 +453,7 @@ class UserCreateView(CreateView):
         return response
 
 
-@method_decorator(role_required(Role.ADMIN), name="dispatch")
+@method_decorator(role_required(Role.ADMIN, Role.SUPER_ADMIN), name="dispatch")
 class LoginReportView(ListView):
     """Auditoria de tentativas de login (sucesso, falha, 2FA incorreto, recuperação de senha
     solicitada) — mesma proteção server-side das outras telas de administração."""
@@ -481,12 +489,14 @@ class LoginReportView(ListView):
         return context
 
 
-@role_required(Role.ADMIN)
+@role_required(Role.ADMIN, Role.SUPER_ADMIN)
 @require_POST
 def user_toggle_active(request, pk):
     """Ativa/desativa um usuário. Mesma proteção server-side de UserListView — GET não é
-    aceito de propósito (ação com efeito colateral não pode ser um link/GET, CSRF-safe)."""
-    target = get_object_or_404(User, pk=pk)
+    aceito de propósito (ação com efeito colateral não pode ser um link/GET, CSRF-safe).
+    Busca em UserAdminService.visible_to: um admin tentando atingir uma conta super-admin
+    via URL forjada recebe 404 (não 403) — nem confirma que a conta existe."""
+    target = get_object_or_404(UserAdminService.visible_to(request.user), pk=pk)
     try:
         UserAdminService.toggle_active(actor=request.user, target=target)
     except ValueError:

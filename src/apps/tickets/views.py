@@ -88,6 +88,6 @@ class TicketUpdateView(LoginRequiredMixin, UpdateView):
         return ticket
 
     def get_form_class(self):
-        if self.request.user.role in (Role.ADMIN, Role.SUPPORT):
+        if self.request.user.role in (Role.SUPER_ADMIN, Role.ADMIN, Role.SUPPORT):
             return TicketStaffUpdateForm
         return TicketUserUpdateForm

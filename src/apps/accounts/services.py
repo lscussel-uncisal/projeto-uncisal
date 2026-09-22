@@ -11,9 +11,10 @@ import qrcode
 import requests
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db.models import QuerySet
 from django.utils import timezone
 
-from apps.accounts.models import LoginAttempt, User
+from apps.accounts.models import LoginAttempt, Role, User
 
 FAILED_RESULTS = (LoginAttempt.Result.INVALID_CREDENTIALS, LoginAttempt.Result.INVALID_2FA)
 
@@ -318,7 +319,27 @@ class TwoFactorService:
 
 
 class UserAdminService:
-    """Regra de negócio de gestão de usuários (ativar/desativar), isolada da view (SRP)."""
+    """Regra de negócio de gestão de usuários (listar, criar, ativar/desativar), isolada
+    da view (SRP) — inclui a hierarquia de papéis: super-admin > admin > suporte > usuário."""
+
+    @staticmethod
+    def visible_to(actor: User) -> QuerySet[User]:
+        """Admin comum nunca vê conta super-admin — nem na listagem, nem conseguindo agir
+        sobre ela via URL forjada (ver user_toggle_active, que usa isto pra buscar o alvo:
+        um admin recebe 404, não 403, pra nem confirmar que a conta existe)."""
+        queryset = User.objects.all()
+        if actor.role != Role.SUPER_ADMIN:
+            queryset = queryset.exclude(role=Role.SUPER_ADMIN)
+        return queryset.order_by("username")
+
+    @staticmethod
+    def creatable_roles(actor: User) -> set[str]:
+        """Nunca confiar no papel que vem do formulário sem checar contra isto — um admin
+        forjando role=super_admin no POST direto (sem passar pelo dropdown) precisa ser
+        rejeitado aqui, não só escondido da UI (ver UserCreateForm.clean_role)."""
+        if actor.role == Role.SUPER_ADMIN:
+            return {Role.SUPER_ADMIN, Role.ADMIN, Role.SUPPORT, Role.USER}
+        return {Role.ADMIN, Role.SUPPORT, Role.USER}
 
     @staticmethod
     def toggle_active(*, actor: User, target: User) -> None:

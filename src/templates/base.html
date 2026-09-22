@@ -27,7 +27,7 @@
                     Chamados
                 </a>
 
-                {% if user.role == 'admin' %}
+                {% if user.is_admin_role or user.is_super_admin_role %}
                 <details class="group relative">
                     <summary class="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-3 py-1.5 transition
                         {% if request.resolver_match.url_name == 'user_list' or request.resolver_match.url_name == 'user_create' or request.resolver_match.url_name == 'login_report' %}bg-slate-100 font-medium text-slate-900{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">

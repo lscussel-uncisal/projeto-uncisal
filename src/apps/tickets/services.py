@@ -9,8 +9,9 @@ class TicketService:
 
     @staticmethod
     def visible_to(user: User) -> QuerySet[Ticket]:
-        """Admin e suporte veem todos os chamados; usuário comum ve apenas os que abriu."""
-        if user.role in (Role.ADMIN, Role.SUPPORT):
+        """Super-admin, admin e suporte veem todos os chamados; usuário comum ve apenas os
+        que abriu."""
+        if user.role in (Role.SUPER_ADMIN, Role.ADMIN, Role.SUPPORT):
             return Ticket.objects.all()
         return Ticket.objects.filter(requester=user)
 
@@ -20,6 +21,6 @@ class TicketService:
         mudança de status). Usuário comum só edita o próprio chamado enquanto ele seguir
         'Aberto' — uma vez que o suporte começa a mexer (muda o status), só o suporte/admin
         edita dali pra frente, pra não haver edição concorrente de dois lados."""
-        if user.role in (Role.ADMIN, Role.SUPPORT):
+        if user.role in (Role.SUPER_ADMIN, Role.ADMIN, Role.SUPPORT):
             return True
         return ticket.requester_id == user.id and ticket.status == Status.OPEN
