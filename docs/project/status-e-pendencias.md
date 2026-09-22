@@ -23,24 +23,36 @@ Atualizado em: 2026-09-21.
 | Parede de 2FA (TOTP + e-mail) com alerta em código incorreto + auto-cadastro com QR code | ADR-024, `docs/security/risk-matrix.md` (R03) |
 | CRUD de escrita de chamados (criar/editar) com RBAC — dono edita só enquanto Aberto, staff edita tudo | ADR-025, `docs/security/risk-matrix.md` (R04) |
 | HTTPS real em produção (Certbot, Full strict, UFW restrito à Cloudflare, Authenticated Origin Pulls) | ADR-026 (bug do firewall de fábrica da Oracle), ADR-027, `docs/security/risk-matrix.md` (R08) |
+| CSS quebrado em produção (CSP bloqueando `onclick` inline; Docker "cego" pra classe Tailwind construída em Python) | ADR-028 |
+| Telas próprias de gestão de usuários (criar/listar/ativar-desativar) e relatório de login, sem depender do Django Admin | ADR-029 |
+| Hierarquia de papéis com super-admin, prevenção de escalonamento de privilégio (admin nunca cria super-admin, nem forjando POST) | ADR-029 |
+| Backup completo (SQLite nativo + Fernet + Cloudflare R2), agendado + botão manual, fecha o R10 no código — falta só configurar credenciais em produção (ver abaixo) | ADR-030, `docs/security/backup-recovery.md` |
 
 ## O que falta
 
 Ordenado pela sequência já combinada. Cada item tem a spec mínima pra implementar sem re-perguntar
 o óbvio — mas **checar com o usuário antes de qualquer decisão que não esteja aqui**.
 
-### 1. Backup automatizado, criptografado, fora do servidor
+### 1. Configurar o backup em produção (código já pronto — ver ADR-030)
 
-- R10 no `risk-matrix.md`, hoje 🔴 pendente — é o único risco "Alto" sem nenhuma mitigação ainda.
-- Design já existe em `docs/security/backup-recovery.md` — falta só a implementação (cron na VM +
-  destino externo).
+- Criar/confirmar o bucket R2 e o token de API (dash.cloudflare.com) — ver
+  "Como habilitar em produção" em `docs/security/backup-recovery.md`.
+- Adicionar as 6 variáveis novas ao GitHub Secret `ENV_FILE` (o deploy sobrescreve o `.env` do
+  servidor a partir dele a cada push — editar só no servidor via SSH não sobrevive ao próximo
+  deploy).
+- Depois de configurado, testar o botão "Backup agora" (Administração → Backup) e fazer pelo
+  menos uma restauração de teste (comando em `backup-recovery.md`).
 
-### 2. Housekeeping pequeno, sem pressa
+### 2. Rotacionar dois segredos (precaução, não comprometimento confirmado)
+
+- `EMAIL_HOST_PASSWORD` e `TURNSTILE_SECRET_KEY` apareceram em texto puro nesta conversa por
+  causa de um `docker compose config` rodado por engano (ver ADR-030, achado final) — mesmo
+  protocolo do incidente anterior de mesma natureza (ver item abaixo). Gerar nova senha de app
+  no Gmail e nova secret key no painel da Cloudflare, atualizar `ENV_FILE`.
+
+### 3. Housekeeping pequeno, sem pressa
 
 - Confirmar 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — R11.
-- Rotacionar a Turnstile **secret key** no painel da Cloudflare — o valor antigo apareceu em texto
-  puro nesta conversa por engano do usuário ao colar; não é urgente (só a secret key vazou, e só
-  neste chat privado), mas é a prática correta.
 - Apagar `prod.env` da pasta temporária de scratch depois que os GitHub Secrets forem conferidos
   (já cumpriu a função, não precisa persistir).
 - Renomear/apagar o arquivo órfão `/etc/iptables/rules.v4` no servidor (ver ADR-026) — hoje
@@ -48,7 +60,7 @@ o óbvio — mas **checar com o usuário antes de qualquer decisão que não est
   de segurança do Claude Code quando tentei via SSH; precisa ser o usuário a rodar:
   `sudo mv /etc/iptables/rules.v4 /etc/iptables/rules.v4.disabled`.
 
-### 3. Manual de estudos + roteiro de apresentação (vídeo de 5–10 min)
+### 4. Manual de estudos + roteiro de apresentação (vídeo de 5–10 min)
 
 Pedido explícito do usuário em 2026-09-21, registrado como **último item**, depois de todo o resto
 acima estar pronto. **Importante: este é um artefato local, fora do repositório** — o usuário foi

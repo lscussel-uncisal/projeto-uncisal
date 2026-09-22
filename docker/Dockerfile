@@ -61,11 +61,12 @@ ENV PATH="/opt/venv/bin:$PATH" \
 COPY --from=builder /opt/venv /opt/venv
 COPY src/ /app/
 COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/scripts/backup-scheduler.sh /app/backup-scheduler.sh
 # Sobrescreve o CSS commitado (usado no dev local) pelo compilado agora, sempre em dia com os templates.
 COPY --from=css-builder /app/static/css/app.css /app/static/css/app.css
 
 RUN mkdir -p /app/staticfiles /app/media /app/db \
-    && chmod +x /app/entrypoint.sh \
+    && chmod +x /app/entrypoint.sh /app/backup-scheduler.sh \
     && chown -R app:app /app
 
 USER app

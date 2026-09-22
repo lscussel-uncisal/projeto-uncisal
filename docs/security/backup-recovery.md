@@ -6,39 +6,80 @@ chamados e contas cadastradas.
 
 ## Status
 
-🔴 Pendente de implementação (documentado agora para já nascer com o deploy; ver item 6 do
-plano 5W2H em `risk-matrix.md`).
+🟡 Implementado no código (`apps/backup`, ver ADR-030) — falta só configurar as 6 variáveis de
+ambiente do R2 em produção (ver "Como habilitar" abaixo) para o job agendado e o botão "Backup
+agora" passarem a funcionar de verdade. Sem elas, `settings.BACKUP_ENABLED = False` e a tela
+mostra um aviso — não quebra o resto da aplicação (mesmo padrão do Turnstile).
 
-## O que precisa ser salvo
+## O que é salvo
 
-- `db.sqlite3` (contém: hashes de senha — já seguros por si só —, segredo TOTP **já criptografado**
-  em repouso, dados dos chamados).
-- `.env` de produção — **não** como backup rotineiro junto do banco; guardar separadamente, uma
+- `db.sqlite3` inteiro (contém: hashes de senha — já seguros por si só —, segredo TOTP **já
+  criptografado** em repouso, dados dos chamados, auditoria de login).
+- `media/` **não** está incluído hoje de propósito — o projeto ainda não tem nenhuma feature de
+  upload (ver `CLAUDE.md`), então a pasta está sempre vazia; o código deixa espaço pra incluir
+  isso depois se um dia ganhar upload.
+- `.env` de produção — **não** faz parte deste backup automatizado; guardar separadamente, uma
   única vez, em um gerenciador de senhas (1Password/Bitwarden ou similar), não em texto solto.
 
-## Estratégia proposta
+## Como funciona (implementado)
 
-1. **Frequência:** diária (cron na VM), fora do horário de maior uso (irrelevante aqui, mas é a
-   prática correta a documentar).
-2. **Como:** `sqlite3 db.sqlite3 ".backup '/tmp/backup.sqlite3'"` (comando nativo do SQLite —
-   consistente mesmo com o banco em uso, ao contrário de um `cp` direto do arquivo).
-3. **Criptografia do backup:** `gpg --symmetric --cipher-algo AES256` antes de sair da VM — o
-   arquivo de backup tem os mesmos dados sensíveis do banco original, não faz sentido protegê-lo
-   a menos no repouso e desprotegê-lo em trânsito/no destino.
-4. **Destino:** fora da própria VM (backup que fica só no mesmo disco não protege contra perda de
-   disco/instância). Opções dentro de free tier: bucket gratuito (Oracle Object Storage tem camada
-   Always Free; Cloudflare R2 também tem tier gratis), ou — solução mínima para o escopo acadêmico
-   — enviar o arquivo cifrado para si mesmo pela conta Gmail dedicada do projeto.
-5. **Retenção:** manter os últimos 7 backups diários (suficiente para o escopo do projeto; um
-   ambiente real definiria política maior).
+1. **Frequência:** diária às 02:00, via um container sidecar dedicado (`docker-compose.yml`,
+   serviço `backup`) rodando `docker/scripts/backup-scheduler.sh` — um loop de shell simples
+   (sem cron/supervisord dentro do container, mais fácil de auditar). Ver também o botão
+   "Backup agora" no menu Administração → Backup, síncrono, para rodar fora do horário agendado.
+2. **Snapshot consistente:** `sqlite3.Connection.backup()` (API nativa do Python `sqlite3`,
+   equivalente ao `.backup` do CLI) — nunca um `cp`/`shutil.copy` direto do arquivo, que
+   poderia capturar uma escrita no meio do caminho (`apps/backup/services.py BackupService`).
+3. **Criptografia do backup:** Fernet (biblioteca `cryptography`, já uma dependência do projeto
+   por causa do `EncryptedCharField`) com uma chave **dedicada** (`BACKUP_ENCRYPTION_KEY`) —
+   nunca reaproveita `FIELD_ENCRYPTION_KEY` (essa é só pro segredo TOTP; propósitos diferentes
+   não compartilham chave). Decisão de usar Fernet em vez de `gpg` (design original desta
+   página): evita instalar o binário GnuPG na imagem Docker só pra isso, quando a dependência
+   criptográfica já existe no projeto — ver ADR-030.
+4. **Destino:** Cloudflare R2 (bucket privado, prefixo `bkp_uncisal/` dentro dele), fora da VM —
+   protege contra perda de disco/instância da Oracle Cloud Free Tier (sem SLA de durabilidade).
+5. **Retenção:** mantém os `BACKUP_RETENTION_COUNT` (padrão 7) objetos mais recentes no prefixo;
+   `BackupService._enforce_retention` apaga os mais antigos a cada execução bem-sucedida.
+6. **Histórico consultável:** cada execução (manual ou agendada) grava um `BackupRun` — visível
+   em Administração → Backup, para admin/super-admin.
+
+## Como habilitar em produção
+
+O deploy sobrescreve o `.env` do servidor a partir do **GitHub Secret `ENV_FILE`** a cada push
+(`.github/workflows/deploy.yml`) — editar o `.env` direto no servidor via SSH funciona até o
+próximo deploy, que apaga a mudança. Editar o secret `ENV_FILE` (Settings → Secrets and
+variables → Actions, no GitHub) acrescentando as linhas de `.env.example`:
+
+```
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=
+R2_BACKUP_PREFIX=bkp_uncisal
+BACKUP_ENCRYPTION_KEY=
+BACKUP_RETENTION_COUNT=7
+```
+
+- `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`: criar um token de API do R2 em
+  dash.cloudflare.com → R2 → "Manage API tokens", permissão **Object Read & Write**, escopo
+  restrito só ao bucket usado aqui (nunca "Admin Read & Write" em todos os buckets).
+- `BACKUP_ENCRYPTION_KEY`: gerar uma vez e nunca perder — sem ela nenhum backup existente pode
+  ser restaurado: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+- `R2_BUCKET_NAME`/`R2_BACKUP_PREFIX`: o bucket precisa existir antes (criar em dash.cloudflare.com
+  → R2 → "Create bucket", privado — R2 não tem bucket público por padrão a menos que configurado
+  explicitamente).
 
 ## Teste de restauração
 
 Backup que nunca foi restaurado em teste não é um backup confiável, é uma suposição. Antes da
-entrega final, fazer pelo menos uma vez:
+entrega final, baixar um objeto do bucket e:
 
 ```bash
-gpg --decrypt backup.sqlite3.gpg > restaurado.sqlite3
+python -c "
+from cryptography.fernet import Fernet
+f = Fernet(b'SUA_BACKUP_ENCRYPTION_KEY')
+open('restaurado.sqlite3', 'wb').write(f.decrypt(open('db-XXXXXXXX.sqlite3.enc', 'rb').read()))
+"
 sqlite3 restaurado.sqlite3 "SELECT COUNT(*) FROM accounts_user;"
 ```
 

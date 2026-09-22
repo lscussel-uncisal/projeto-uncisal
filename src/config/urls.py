@@ -25,4 +25,5 @@ urlpatterns = [
     path("", HomeRedirectView.as_view(), name="home"),
     path("", include("apps.accounts.urls")),
     path("chamados/", include("apps.tickets.urls")),
+    path("backup/", include("apps.backup.urls")),
 ]

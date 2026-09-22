@@ -21,6 +21,24 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
+  backup:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: helpdesk:latest
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    # So le o banco pra tirar o snapshot (sqlite3 .backup) — nunca precisa escrever nele,
+    # entao o volume fica montado read-only aqui (defesa em profundidade: um bug neste
+    # processo nao consegue corromper o banco de producao).
+    volumes:
+      - db_data:/app/db:ro
+      - media_data:/app/media:ro
+    entrypoint: ["/app/backup-scheduler.sh"]
+    # BACKUP_ENABLED=False (sem as variaveis do R2 no .env) faz o job agendado falhar e
+    # logar, sem quebrar o resto da aplicacao — mesmo comportamento do botao "Backup agora".
+
 volumes:
   db_data:
   media_data:

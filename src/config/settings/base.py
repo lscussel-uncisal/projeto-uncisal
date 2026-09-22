@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.accounts",
     "apps.tickets",
+    "apps.backup",
 ]
 
 MIDDLEWARE = [
@@ -136,3 +137,25 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Central de Chamados <no-reply@example.com>")
+
+# --- Backup (Cloudflare R2) ---
+# Mesmo padrao do Turnstile: nasce desabilitado sem quebrar nada (sem credencial "de mentira"
+# chumbada aqui), so liga sozinho quando as 5 variaveis existirem no ambiente. NUNCA exigido via
+# require() em prod.py de proposito — e um recurso adicional opcional, exigir isso travaria o
+# deploy de quem ainda nao configurou o R2. Ver docs/security/backup-recovery.md e ADR-030.
+R2_ACCOUNT_ID = env("R2_ACCOUNT_ID", default="")
+R2_ACCESS_KEY_ID = env("R2_ACCESS_KEY_ID", default="")
+R2_SECRET_ACCESS_KEY = env("R2_SECRET_ACCESS_KEY", default="")
+R2_BUCKET_NAME = env("R2_BUCKET_NAME", default="")
+R2_BACKUP_PREFIX = env("R2_BACKUP_PREFIX", default="bkp_uncisal")
+# Chave Fernet dedicada — nunca reaproveitar FIELD_ENCRYPTION_KEY (TOTP) para outro proposito;
+# gerar com: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+BACKUP_ENCRYPTION_KEY = env("BACKUP_ENCRYPTION_KEY", default="")
+BACKUP_RETENTION_COUNT = env.int("BACKUP_RETENTION_COUNT", default=7)
+BACKUP_ENABLED = bool(
+    R2_ACCOUNT_ID
+    and R2_ACCESS_KEY_ID
+    and R2_SECRET_ACCESS_KEY
+    and R2_BUCKET_NAME
+    and BACKUP_ENCRYPTION_KEY
+)

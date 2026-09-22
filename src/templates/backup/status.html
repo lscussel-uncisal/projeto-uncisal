@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Backup · Central de Chamados{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-semibold text-slate-900">Backup</h1>
+        <p class="text-sm text-slate-500">
+            Snapshot completo do banco, cifrado, enviado para o Cloudflare R2
+            ({{ backup_prefix }}/). Automático todo dia às 02h; mantém os {{ retention_count }}
+            mais recentes.
+        </p>
+    </div>
+    {% if backup_enabled %}
+        <form method="post" action="{% url 'backup:run_now' %}">
+            {% csrf_token %}
+            <button type="submit"
+                class="shrink-0 rounded-md bg-slate-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-slate-800">
+                Backup agora
+            </button>
+        </form>
+    {% endif %}
+</div>
+
+{% if not backup_enabled %}
+    <div class="mb-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <svg class="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+        <span>
+            Backup ainda não está configurado — faltam as variáveis de ambiente do R2 no
+            servidor (ver <code>docs/security/backup-recovery.md</code>). O botão "Backup agora"
+            só aparece depois de configurado.
+        </span>
+    </div>
+{% endif %}
+
+<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    {% for run in runs %}
+        <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-4 last:border-b-0">
+            <div class="min-w-0">
+                <p class="truncate font-medium text-slate-900">{{ run.object_key|default:"—" }}</p>
+                <p class="text-sm text-slate-500">
+                    {{ run.created_at|date:"d/m/Y H:i" }}
+                    {% if run.size_bytes %} · {{ run.size_bytes|filesizeformat }}{% endif %}
+                    {% if run.error_message %} · {{ run.error_message }}{% endif %}
+                </p>
+            </div>
+            <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium
+                {% if run.status == 'success' %}bg-green-50 text-green-700{% else %}bg-red-50 text-red-700{% endif %}">
+                {{ run.get_status_display }}
+            </span>
+        </div>
+    {% empty %}
+        <div class="p-10 text-center">
+            <p class="text-sm text-slate-500">Nenhum backup executado ainda.</p>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

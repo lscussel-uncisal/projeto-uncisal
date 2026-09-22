@@ -717,3 +717,102 @@ CI/producao) e extraido o CSS gerado de dentro do container — confirmado `.pl-
 confirmados verdes no CI, suspeitar do **pipeline de build do asset**, nao só do codigo-fonte —
 recompilar localmente e nao ter nenhuma relacao com o que a imagem Docker realmente gera se o
 Dockerfile tiver seu proprio passo de compilacao independente (era exatamente esse o caso aqui).
+
+## ADR-029 — Gestão de usuários: telas próprias (não Django Admin) + hierarquia de papéis com super-admin
+
+**Contexto:** faltava um jeito de criar usuário e ver relatório de login sem depender do Django
+Admin — que, além de fugir do resto da UI (Tailwind, RBAC próprio), usa `is_staff`/`is_superuser`,
+completamente desacoplados do campo `role` que toda a aplicação já usa pra RBAC. Nada sincronizava
+os dois: uma conta com `role=Administrador` podia nem ter acesso ao `/admin/` do Django.
+
+**Decisao 1 — telas de gestão próprias, protegidas por `role_required`, não pelo admin do Django:**
+"Usuários" (listar/ativar/desativar/criar) e "Relatório de login" (auditoria de `LoginAttempt`,
+com filtro e paginação) viram views normais da aplicação, com o mesmo estilo Tailwind do resto,
+protegidas no servidor por `apps.accounts.permissions.role_required` — nunca por esconder o link
+do menu. Validado com requisição HTTP direta carregando cookie de sessão de outro papel,
+contornando a UI de propósito, pra confirmar que a proteção real está no backend.
+
+**Decisao 2 — hierarquia de papéis com super-admin, e prevenção de escalonamento de privilégio:**
+`Role` ganhou `SUPER_ADMIN`, acima de `ADMIN`. Regra validada explicitamente com o usuário:
+usuário comum e suporte **nunca** criam conta (nem veem a tela); admin cria admin/suporte/usuário,
+mas **nunca** super-admin; super-admin cria qualquer papel, inclusive outro super-admin. A parte
+que importa: essa regra é verificada **duas vezes** — o dropdown de papel no formulário já não
+oferece "Super Administrador" pra quem não é super-admin (`UserCreateForm.__init__` restringindo
+`choices` via `UserAdminService.creatable_roles`), *e* `UserCreateForm.clean_role` rejeita o valor
+mesmo que venha de um POST forjado direto, sem passar pelo dropdown — não dá pra confiar só na UI
+escondendo a opção, porque um cliente HTTP não é obrigado a respeitar o HTML que a página manda.
+Testado explicitamente (`TestAdminCannotEscalatePrivileges.test_admin_cannot_create_super_admin_even_via_forged_post`).
+
+Pelo mesmo motivo, um admin comum não pode nem ver contas super-admin: `UserAdminService.visible_to`
+filtra a listagem, e o endpoint de ativar/desativar busca o alvo *dentro* desse mesmo queryset
+filtrado — um admin tentando atingir uma conta super-admin por URL direta recebe **404**, não 403,
+pra nem confirmar que a conta existe (mesmo padrão já usado em `apps/tickets`).
+
+Super-admin herda tudo que admin já tinha em `apps/tickets` (ver `TicketService`,
+`TicketStaffUpdateForm`) — sem isso, o papel "acima" de admin acabaria com *menos* acesso a
+chamados que um admin comum, o que não faz sentido numa hierarquia.
+
+**Decisao 3 — criação de usuário nunca define/transmite senha:** `UserCreateForm.save()` chama
+`user.set_unusable_password()` — a conta nasce sem senha utilizável de propósito. A pessoa recebe
+um e-mail (`AccountNotificationService.send_welcome_email`) direcionando pro fluxo já existente
+de "Esqueci minha senha" pra definir a própria senha. Decisão deliberada de **não** duplicar a
+lógica de gerar/enviar senha temporária que já existe em `PasswordResetRequestView` — reaproveitar
+um caminho já testado e com o anti-enumeração já resolvido é mais seguro que escrever um segundo
+caminho paralelo pra fazer a mesma coisa.
+
+## ADR-030 — Backup fecha o R10: SQLite nativo + Fernet + R2, sem cron nem GPG no container
+
+**Contexto:** R10 (`risk-matrix.md`) era o único risco "Alto" sem nenhuma mitigação — a Oracle
+Cloud Free Tier não garante SLA de durabilidade de disco, e o banco inteiro é um único arquivo
+SQLite. O design em `docs/security/backup-recovery.md` já existia (cron + `.backup` + `gpg` +
+destino externo); esta ADR registra os pontos onde a implementação real diverge do design
+original e por quê, mais as decisões novas (app `apps/backup`).
+
+**Decisão 1 — Fernet em vez de GPG para cifrar o backup:** o design original pedia
+`gpg --symmetric`. Implementado com `cryptography.fernet.Fernet` (biblioteca já usada no projeto
+por causa do `EncryptedCharField`/segredo TOTP) em vez disso — evita instalar o binário GnuPG na
+imagem Docker (mais uma dependência de sistema, mais superfície, mais tempo de build) quando a
+dependência criptográfica já existe e já é auditada pelo Dependabot. Fernet usa AES-128-CBC +
+HMAC-SHA256 autenticado — adequado para o modelo de ameaça aqui (backup em repouso num bucket
+privado). Chave **dedicada** (`BACKUP_ENCRYPTION_KEY`), nunca reaproveita `FIELD_ENCRYPTION_KEY`
+— propósitos diferentes (um é por-campo em uso constante pela aplicação, o outro é só pra um
+arquivo de backup) não devem compartilhar chave: rotacionar/vazar um nunca deve obrigar a mexer
+no outro.
+
+**Decisão 2 — sidecar de shell em vez de cron dentro do container:** em vez de instalar/configurar
+`cron` dentro da imagem da aplicação (mistura processo de aplicação com scheduler, complica o
+modelo de container "um processo por container"), o agendamento é um **segundo serviço** no
+`docker-compose.yml` (`backup`), mesma imagem, entrypoint trocado para
+`docker/scripts/backup-scheduler.sh` — um loop de shell (`while true; sleep 30`) comparando o
+horário atual com `02:00`. Mais simples de auditar linha a linha (projeto de segurança) do que
+depender de um scheduler adicional. Volumes de banco/media montados **read-only** nesse serviço —
+ele só precisa ler o banco pra tirar o snapshot, nunca escrever; um bug ali não consegue corromper
+o banco de produção.
+
+**Decisão 3 — snapshot via API nativa do `sqlite3`, nunca `cp`:** `BackupService._snapshot_database`
+usa `sqlite3.Connection.backup()` (stdlib do Python, equivalente ao `.backup` do CLI) — garante
+uma cópia consistente mesmo com o banco em uso concorrentemente pelo container `web`, ao
+contrário de copiar o arquivo `.sqlite3` direto (poderia capturar uma escrita no meio do caminho
+e gerar um backup corrompido sem nenhum aviso).
+
+**Decisão 4 — nunca quebra o deploy atual, mesmo padrão do Turnstile:** `settings.BACKUP_ENABLED`
+nasce `False` quando qualquer uma das 5 variáveis do R2 falta no ambiente — nunca exigido via
+`require()` em `prod.py`. Diferente de `SECRET_KEY`/`EMAIL_HOST_*` (que fazem a aplicação recusar
+subir se faltar), backup é tratado como um recurso adicional opcional: exigi-lo quebraria o
+próximo deploy pra quem ainda não configurou o R2. `BackupService.run_full_backup()` verifica a
+flag e grava um `BackupRun` com `status=FAILED` explicando o motivo, tanto pro botão "Backup
+agora" (mensagem clara na tela) quanto pro job agendado (log claro, não um crash silencioso).
+
+**Decisão 5 — histórico de execuções persistido (`BackupRun`):** cada chamada de
+`run_full_backup()` grava um registro (sucesso/falha, chave do objeto, tamanho, erro) — nunca a
+chave de criptografia nem a credencial do R2. Dá pra tela "Administração → Backup" mostrar
+histórico de verdade, não só um botão sem feedback.
+
+**Achado durante a implementação, não relacionado ao backup em si:** `docker compose config`
+expande e imprime todas as variáveis de ambiente resolvidas do `.env`, inclusive segredos —
+rodar esse comando (mesmo só pra validar sintaxe do YAML) vazou `EMAIL_HOST_PASSWORD` e
+`TURNSTILE_SECRET_KEY` reais em texto puro no terminal/conversa. Não afeta o Git (`.env` é
+ignorado), mas as duas chaves foram recomendadas para rotação por precaução — mesmo protocolo já
+registrado em `docs/project/status-e-pendencias.md` para o incidente anterior de mesma natureza.
+Validar sintaxe de compose sem `config` (ex.: `docker compose config --quiet` teria o mesmo
+problema — o comando em si sempre resolve variáveis; a forma segura é revisão visual do YAML).
