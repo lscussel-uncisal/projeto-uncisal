@@ -9,7 +9,7 @@ TEXT_INPUT_CLASSES = (
 )
 # Espaço extra à direita pro botão de mostrar/ocultar senha (ver templates/partials/form_fields.html)
 # não ficar em cima do texto digitado.
-PASSWORD_INPUT_CLASSES = TEXT_INPUT_CLASSES.replace("px-3", "pl-3 pr-10")
+PASSWORD_INPUT_CLASSES = TEXT_INPUT_CLASSES.replace("px-3", "pl-3 pr-12")
 CHECKBOX_CLASSES = "h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
 RADIO_CLASSES = "h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
 
