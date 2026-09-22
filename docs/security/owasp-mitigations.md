@@ -56,9 +56,9 @@ segurança.
       `LoginThrottleService` (já contava `INVALID_2FA`, só faltava a tela chamá-lo)
 - [x] `try/except` ao redor do envio de e-mail (`TwoFactorService.send_email_code`/
       `send_wrong_code_alert`, falha fechado — nunca deixa a exceção virar 500)
-- [ ] Confirmar com o usuário o conjunto final (3 ou 5 categorias)
-- [ ] Apontar arquivo/linha exata de cada mitigação após a implementação
-- [ ] Copiar o resumo final para a tabela do `README.md`
+- [x] Confirmar com o usuário o conjunto final (3 ou 5 categorias) — 5 (A01, A07, A09 + A05, A04)
+- [x] Apontar arquivo/linha exata de cada mitigação após a implementação
+- [x] Copiar o resumo final para a tabela do `README.md` (2026-09-22)
 
 Dado o volume já implementado, o conjunto final recomendado passa a ser 5 categorias:
 **A01, A07, A09** (núcleo) + **A05, A04** (bônus já concluído/quase gratuito) — ver

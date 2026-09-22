@@ -49,8 +49,9 @@ Todo o tráfego público passa obrigatoriamente pela Cloudflare (proxy ativado, 
     ├── config/             # settings (base/dev/test/prod), urls, wsgi/asgi
     └── apps/
         ├── core/           # utilitários e modelos-base compartilhados
-        ├── accounts/       # autenticação, papéis (RBAC), 2FA
-        └── tickets/        # CRUD de chamados
+        ├── accounts/       # autenticação, papéis (RBAC), 2FA, gestão de usuários
+        ├── tickets/        # CRUD de chamados
+        └── backup/         # backup cifrado agendado + botão manual, Cloudflare R2
 ```
 
 Cada app segue a mesma organização interna: `models.py`, `views.py`, `services.py` (regras de negócio, mantendo as views finas), `permissions.py` (quando aplicável) e `tests/`.
@@ -135,14 +136,17 @@ Decisões de arquitetura registradas em [`docs/architecture/decisions.md`](docs/
 
 ## Segurança — mitigações OWASP Top 10:2025
 
-> A preencher conforme as features forem implementadas. Detalhamento completo em
-> [`docs/security/owasp-mitigations.md`](docs/security/owasp-mitigations.md).
+Detalhamento completo (análise de custo/benefício das 10 categorias, o que foi descartado e por
+quê) em [`docs/security/owasp-mitigations.md`](docs/security/owasp-mitigations.md). As 3
+obrigatórias + 2 bônus já implementadas:
 
 | Categoria OWASP | Onde é mitigada | Como |
 |---|---|---|
-| _A confirmar_ | | |
-| _A confirmar_ | | |
-| _A confirmar_ | | |
+| **A01 — Broken Access Control** | `apps/accounts/permissions.py` (`role_required`), `apps/tickets/services.py`/`apps/accounts/services.py` (`UserAdminService`) | RBAC sempre checado no backend, nunca em dado do cliente. Hierarquia de papéis (super-admin > admin > suporte > usuário) com prevenção explícita de escalonamento — admin não cria nem vê conta super-admin, mesmo forjando a requisição direto |
+| **A07 — Authentication Failures** | `apps/accounts/services.py` (`TwoFactorService`, `LoginThrottleService`, `TurnstileService`) | 2FA (TOTP/e-mail) + Cloudflare Turnstile + *rate limiting* no login e na verificação do código 2FA |
+| **A09 — Security Logging and Alerting Failures** | `apps/accounts/models.py` (`LoginAttempt`), tela "Relatório de login" | Auditoria de toda tentativa de login/2FA/recuperação de senha, inclusive contra e-mails inexistentes (detecção de enumeração); alerta por e-mail em login bem-sucedido e em código 2FA incorreto |
+| **A05 — Injection** | ORM do Django (todo o projeto), autoescape de template | Nenhum `.raw()`/SQL com string interpolada; nenhum `\|safe`/`mark_safe` em conteúdo de usuário — verificado ao vivo com payload de script numa descrição de chamado, sai escapado |
+| **A04 — Cryptographic Failures** | `config/settings/base.py` (`PASSWORD_HASHERS`), `apps/core/fields.py` (`EncryptedCharField`), `apps/backup/services.py` | Argon2id como hasher de senha; segredo TOTP e backup do banco cifrados em repouso, cada um com sua própria chave Fernet dedicada |
 
 ## Checklist de entrega
 
