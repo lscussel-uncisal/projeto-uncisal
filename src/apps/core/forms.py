@@ -8,8 +8,17 @@ TEXT_INPUT_CLASSES = (
     "focus:ring-1 focus:ring-slate-500"
 )
 # Espaço extra à direita pro botão de mostrar/ocultar senha (ver templates/partials/form_fields.html)
-# não ficar em cima do texto digitado.
-PASSWORD_INPUT_CLASSES = TEXT_INPUT_CLASSES.replace("px-3", "pl-3 pr-12")
+# não ficar em cima do texto digitado. Escrita por extenso (não com TEXT_INPUT_CLASSES.replace(...))
+# de propósito: o Tailwind é compilado a partir de um scan estático de texto no Dockerfile
+# (ver docker/Dockerfile, estágio css-builder) — uma classe só nasce no CSS final se aparecer
+# literalmente em algum arquivo que aquele estágio copia. "pl-3"/"pr-12" concatenados em runtime
+# via .replace() já causaram um bug real: o botão de olho ficava sem padding em produção porque
+# o scanner nunca via essas classes como texto.
+PASSWORD_INPUT_CLASSES = (
+    "block w-full rounded-md border border-slate-300 pl-3 pr-12 py-2 text-sm text-slate-900 "
+    "shadow-sm placeholder:text-slate-400 focus:border-slate-500 focus:outline-none "
+    "focus:ring-1 focus:ring-slate-500"
+)
 CHECKBOX_CLASSES = "h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
 RADIO_CLASSES = "h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
 

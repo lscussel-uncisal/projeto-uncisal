@@ -665,3 +665,55 @@ Nginx tudo que o Django ja manda via `prod.py`, deixando lá so o que o Django n
 padrao (`Content-Security-Policy`, `Permissions-Policy`). **Resultado apos a correcao: nota A+
 nos 4 endpoints** (Cloudflare testa IPv4 e IPv6 separadamente) — confirma HSTS valido, forward
 secrecy completo, sem Heartbleed/POODLE/BEAST.
+
+## ADR-028 — Duas classes de bug de UI em producao: CSP bloqueando `onclick` e Tailwind "cego" pro Python
+
+**Contexto:** usuario reportou repetidas vezes (varias rodadas de correcao "aplicada" sem
+efeito visivel) que o botao de mostrar/ocultar senha nao funcionava e que o padding ao redor
+dele estava errado. Cada tentativa anterior parecia corrigir localmente mas o problema
+persistia identico em producao. Duas causas raiz completamente diferentes, cada uma mascarando
+a investigacao da outra.
+
+**Bug 1 — CSP bloqueava o `onclick=""` inline (botao nao fazia nada):**
+O `Content-Security-Policy` do Nginx (`script-src 'self' https://challenges.cloudflare.com`,
+sem `unsafe-inline`) bloqueia silenciosamente qualquer `onclick="..."` inline — o navegador so
+acusa isso no console (`Executing inline event handler violates... script-src`), nunca como
+erro visivel na tela. O botao parecia renderizado corretamente mas o clique nao tinha efeito
+nenhum. **Correcao:** mover a logica para `static/js/app.js` (arquivo externo, mesma origem,
+ja permitido pelo CSP) usando delegacao de evento em atributos `data-toggle-password` /
+`data-modal-open` / `data-modal-close`, em vez de `onclick` inline. Nunca a alternativa de
+adicionar `'unsafe-inline'` ao CSP — isso reabriria a porta pra XSS via injecao de handler.
+
+**Bug 2 — padding do campo de senha nunca chegava em producao, nao importa quantas vezes
+recompilado e commitado localmente:**
+`docker/Dockerfile` tem um estagio `css-builder` que recompila o Tailwind **do zero a cada
+build de imagem**, sobrescrevendo qualquer `static/css/app.css` commitado no repositorio (de
+proposito — ver comentario original no Dockerfile: evita que o CSS commitado fique desatualizado
+se um template mudar). Esse estagio so copiava `src/templates/` pro contexto de build antes de
+rodar o scanner do Tailwind. As classes `pl-3`/`pr-12` do botao de olho, porem, nao existiam em
+nenhum template — eram construidas em runtime em `apps/core/forms.py` via
+`TEXT_INPUT_CLASSES.replace("px-3", "pl-3 pr-12")`. Como `src/apps/` nunca era copiado pro
+estagio `css-builder`, o scanner do Tailwind rodando no container **nunca via esse arquivo
+Python** — as classes nunca existiam no CSS final, nao importa quantas vezes o app.css fosse
+recompilado e commitado manualmente (o build sempre sobrescrevia com uma versao sem elas).
+`px-3` "funcionava" por coincidencia — a mesma string ja aparecia literalmente em varios
+templates HTML por outros motivos.
+
+**Correcao (duas partes, as duas necessarias):**
+1. `docker/Dockerfile`: `COPY src/apps/ /app/apps/` adicionado ao estagio `css-builder`, antes
+   do `RUN tailwindcss ...` — agora qualquer classe Tailwind referenciada em Python (nao só em
+   templates) e visivel pro scanner.
+2. `apps/core/forms.py`: `PASSWORD_INPUT_CLASSES` deixou de ser derivado via `.replace()` em
+   cima de `TEXT_INPUT_CLASSES` e passou a ser uma string literal completa — evita depender de
+   concatenacao/interpolacao em runtime pra gerar nomes de classe Tailwind, que e justamente o
+   padrao que a documentacao oficial do Tailwind recomenda evitar (o scanner faz busca textual
+   estatica, nao executa o codigo).
+
+**Validado:** rodado `docker build --target css-builder` isoladamente (mesmo pipeline exato do
+CI/producao) e extraido o CSS gerado de dentro do container — confirmado `.pl-3{...}` e
+`.pr-12{...}` presentes no `app.css` resultante, com `--spacing` corretamente definido.
+
+**Licao geral:** quando uma correcao de UI "nao pega" em producao mesmo apos commit e deploy
+confirmados verdes no CI, suspeitar do **pipeline de build do asset**, nao só do codigo-fonte —
+recompilar localmente e nao ter nenhuma relacao com o que a imagem Docker realmente gera se o
+Dockerfile tiver seu proprio passo de compilacao independente (era exatamente esse o caso aqui).

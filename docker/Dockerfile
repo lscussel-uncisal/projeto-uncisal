@@ -26,6 +26,7 @@ RUN case "${TARGETARCH}" in \
     && chmod +x /usr/local/bin/tailwindcss
 
 COPY src/templates/ /app/templates/
+COPY src/apps/ /app/apps/
 COPY src/tailwind/input.css /app/tailwind/input.css
 
 RUN mkdir -p /app/static/css \

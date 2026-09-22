@@ -8,6 +8,15 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
 - **Nunca** escrever segredos, senhas, tokens ou chaves de API diretamente no código, mesmo
   "temporariamente para testar". Sempre via `django-environ` (`env(...)`) lendo do `.env`
   (que nunca é commitado). Lista completa do que não pode vazar: `docs/security/nao-commitar.md`.
+- **Nunca** montar uma classe Tailwind via concatenação/`.replace()` em Python (ex.:
+  `TEXT_INPUT_CLASSES.replace("px-3", "pl-3 pr-12")`) nem assumir que recompilar e commitar
+  `static/css/app.css` localmente é o que vai pra produção — o estágio `css-builder` do
+  `docker/Dockerfile` recompila o Tailwind do zero a cada build de imagem e **sobrescreve**
+  esse arquivo, escaneando só os diretórios que ele copia pro contexto (`src/templates/` e
+  `src/apps/`). Uma classe que só existe como texto dentro de um arquivo não copiado pra lá
+  (ou construída em runtime, nunca aparecendo por extenso em nenhum arquivo) nunca entra no
+  CSS final, não importa quantas vezes seja recompilada e commitada manualmente (ver ADR-028).
+  Escrever sempre a classe completa, por extenso, num arquivo que aquele estágio copia.
 - **Nunca** gerar uma senha/segredo num script Python no Windows (`print(...)` redirecionado pra
   arquivo com `>`) e transferir esse arquivo pra um servidor Linux esperando que o conteúdo bata
   exatamente com o que foi mostrado ao usuário — o `print()` do Windows grava `\r\n`, e
