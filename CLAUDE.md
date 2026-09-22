@@ -8,6 +8,15 @@ Estas regras existem para evitar erros caros de esquecimento — leia antes de e
 - **Nunca** escrever segredos, senhas, tokens ou chaves de API diretamente no código, mesmo
   "temporariamente para testar". Sempre via `django-environ` (`env(...)`) lendo do `.env`
   (que nunca é commitado). Lista completa do que não pode vazar: `docs/security/nao-commitar.md`.
+- **Nunca** gerar uma senha/segredo num script Python no Windows (`print(...)` redirecionado pra
+  arquivo com `>`) e transferir esse arquivo pra um servidor Linux esperando que o conteúdo bata
+  exatamente com o que foi mostrado ao usuário — o `print()` do Windows grava `\r\n`, e
+  `$(cat arquivo)` no Linux só remove o `\n` final, deixando um `\r` invisível grudado no valor
+  real (a senha salva nunca bate com a que foi digitada, e nada no console entrega o motivo).
+  Usar `sys.stdout.write(valor)` (sem newline) ao gerar, e `tr -d '\r\n'` ao ler no lado Linux
+  como cinto e suspensório. Se uma credencial gerada por mim "misteriosamente" não funciona,
+  suspeitar disso primeiro, e validar com `check_password()`/equivalente no mesmo processo antes
+  de sequer mostrar o valor pro usuário.
 - **Nunca** adicionar um valor default inseguro a uma variável sensível em `config/settings/prod.py`
   (ex.: `SECRET_KEY`, senha de e-mail). Se faltar no ambiente, a aplicação deve falhar alto
   (`ImproperlyConfigured`), nunca cair silenciosamente para um valor de desenvolvimento.

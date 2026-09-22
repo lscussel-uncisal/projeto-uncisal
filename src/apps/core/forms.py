@@ -7,6 +7,9 @@ TEXT_INPUT_CLASSES = (
     "shadow-sm placeholder:text-slate-400 focus:border-slate-500 focus:outline-none "
     "focus:ring-1 focus:ring-slate-500"
 )
+# Espaço extra à direita pro botão de mostrar/ocultar senha (ver templates/partials/form_fields.html)
+# não ficar em cima do texto digitado.
+PASSWORD_INPUT_CLASSES = TEXT_INPUT_CLASSES.replace("px-3", "pl-3 pr-10")
 CHECKBOX_CLASSES = "h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
 RADIO_CLASSES = "h-4 w-4 border-slate-300 text-slate-900 focus:ring-slate-500"
 
@@ -25,5 +28,7 @@ class TailwindStyledFormMixin:
                 widget.attrs.setdefault("class", CHECKBOX_CLASSES)
             elif isinstance(widget, forms.RadioSelect):
                 widget.attrs.setdefault("class", RADIO_CLASSES)
+            elif isinstance(widget, forms.PasswordInput):
+                widget.attrs.setdefault("class", PASSWORD_INPUT_CLASSES)
             else:
                 widget.attrs.setdefault("class", TEXT_INPUT_CLASSES)
