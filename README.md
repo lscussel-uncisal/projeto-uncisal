@@ -151,15 +151,33 @@ obrigatórias + 2 bônus já implementadas:
 
 ## Checklist de entrega
 
-- [x] Aplicação no ar com IP público / domínio (`uncisal.lserpsistemas.com.br`)
-- [x] HTTPS via Certbot com redirecionamento automático
-- [x] Testes SSL/TLS aprovados (Qualys, com PQC) — nota A+ nos 4 endpoints (IPv4/IPv6), PQC Key
-      Exchange confirmado (`X25519MLKEM768`) em 2026-09-22 — print em
+Os 9 itens exatos do "Checklist Final de Entrega" do
+[enunciado oficial da disciplina](https://github.com/ziraldocardoso/Projeto_aplicado-praticas_de_mercado/blob/main/Escopo_e_elementos_obrigatorios.md) —
+conferência item a item, com evidência de cada um, em [`docs/cross-check.md`](docs/cross-check.md).
+
+- [x] A aplicação Web está no ar e acessível por um IP público (Eixo 1) —
+      `163.176.75.32` (reservado) e `uncisal.lserpsistemas.com.br`
+- [x] O Web Server (Nginx) está configurado com HTTPS (Certbot/Let's Encrypt) e redireciona o
+      tráfego HTTP para HTTPS automaticamente (Eixo 1) — Certbot 5.8.0, renovação automática via
+      timer systemd nativo (`snap.certbot.renew.timer`) — ver ADR-027
+- [x] Os testes de TLS/SSL retornaram nota A (usamos domínio, não só IP), com PQC ativado
+      (Eixo 1) — nota **A+** nos 4 endpoints (IPv4/IPv6), PQC Key Exchange confirmado
+      (`X25519MLKEM768`) em 2026-09-22 — print em
       [`docs/security/evidencias/qualys-ssl-report-2026-09-22.png`](docs/security/evidencias/qualys-ssl-report-2026-09-22.png)
-- [x] SSH por chave + Fail2Ban configurado — `PasswordAuthentication no`, `PermitRootLogin no`,
-      5 jails ativos, auditoria de menor privilégio confirmada (ADR-032)
-- [x] Repositório público, `.gitignore` correto, sem segredos expostos — hooks `gitleaks` +
-      `detect-private-key` no pre-commit
-- [x] Login, página interna autenticada e logout funcionais
-- [x] 3 mitigações OWASP documentadas — `docs/security/owasp-mitigations.md` (5 categorias)
-- [x] Pipeline CI/CD automatizado via GitHub Actions
+- [x] O acesso à nuvem usa boas práticas — chave SSH e Fail2Ban na porta 22 (Eixo 1) —
+      `PasswordAuthentication no`, `PermitRootLogin no`, Fail2Ban com `maxretry = 4`/
+      `bantime = 24h` (exato da meta mínima), 5 jails ativos, auditoria de menor privilégio
+      confirmada (ADR-032)
+- [x] O código está versionado em repositório público no GitHub, conta devidamente configurada
+      (Eixo 2) — push via PAT (Git Credential Manager); recomendação de 2FA na conta GitHub, a
+      confirmar (ver `docs/cross-check.md`)
+- [x] `.gitignore` configurado, sem chaves/senhas expostas no código (Eixo 2) — hooks `gitleaks` +
+      `detect-private-key` no pre-commit e no CI
+- [x] Aplicação possui Login, Página Interna e Logout, desenvolvida com auxílio de IA via IDE
+      (Antigravity ou equivalente) (Eixo 3) — Claude Code, permitido explicitamente pelo
+      enunciado como "ambiente similar baseado em IA" (ver ADR-006)
+- [x] O README explica quais foram os itens do OWASP Top 10 mitigados e onde encontrá-los no
+      código (Eixo 3) — 5 categorias documentadas (mínimo exigido: 3), ver
+      [`docs/security/owasp-mitigations.md`](docs/security/owasp-mitigations.md)
+- [x] Fluxo de implantação automatizado com CI/CD via GitHub Actions (Integração e Entrega
+      Contínuas) — dispara em todo `git push origin main`, `.github/workflows/deploy.yml`
