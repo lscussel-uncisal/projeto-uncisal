@@ -125,6 +125,7 @@ Decisões de arquitetura registradas em [`docs/architecture/decisions.md`](docs/
 ## Status do projeto
 
 - [O que já está pronto e o que falta (com spec mínima de cada pendência)](docs/project/status-e-pendencias.md)
+- [Cross-check: enunciado da disciplina × o que foi entregue, item a item](docs/cross-check.md)
 
 ## Gestão de risco
 
