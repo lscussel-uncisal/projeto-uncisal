@@ -26,7 +26,7 @@ verificação: 2026-09-22.
 |---|---|---|
 | Repositório no GitHub, acesso público | ✅ | `github.com/lscussel-uncisal/projeto-uncisal`, `visibility: public` confirmado via API |
 | Conta GitHub configurada com segurança: chave SSH ou PAT para commit/push | ✅ | HTTPS + Git Credential Manager (PAT), confirmado (`credential.helper = manager`) |
-| 2FA na conta do GitHub (recomendação do enunciado, não obrigatório) | 🟡 A confirmar com o aluno | Não verificável via API com o token atual — Settings → Password and authentication no GitHub |
+| 2FA na conta do GitHub (recomendação do enunciado, não obrigatório) | ✅ | Já ativo — `docs/security/risk-matrix.md` (R11) |
 | README.md como relatório técnico da entrega | ✅ | `README.md` — arquitetura, stack, estrutura, risco, OWASP, checklist |
 | `.gitignore` correto; proibido commit de `.env`, chave privada, credencial de nuvem, senha hardcoded, banco local | ✅ | `.gitignore` + hooks `gitleaks`/`detect-private-key` (pre-commit e CI) — `docs/security/nao-commitar.md` |
 | Vazamento de credencial real = penalidade imediata | ✅ nenhum vazamento no repositório | Um incidente ocorreu **nesta conversa** (não no repositório): `docker compose config` expôs `EMAIL_HOST_PASSWORD`/`TURNSTILE_SECRET_KEY` em texto puro no chat local — nunca chegou a `.env` versionado nem a nenhum arquivo do repositório. Decisão registrada de não rotacionar (risco aceito) — ADR-030 |
@@ -56,18 +56,12 @@ verificação: 2026-09-22.
 2. Web server + HTTPS + redirect automático — ✅
 3. Teste de TLS/SSL com nota A (mínimo) + PQC — ✅ (A+)
 4. Chave SSH + Fail2Ban (porta 22) — ✅
-5. Repositório público no GitHub, conta configurada — ✅ (2FA do GitHub 🟡 a confirmar)
+5. Repositório público no GitHub, conta configurada (2FA incluído) — ✅
 6. `.gitignore` sem segredo exposto — ✅
 7. Login + página interna + logout, com IA (Antigravity ou equivalente) — ✅
 8. README com as 3 (ou mais) categorias OWASP e onde estão — ✅
 9. CI/CD automatizado via GitHub Actions — ✅
 
-## Única pendência deste cross-check
-
-- Confirmar 2FA ativo na conta pessoal do GitHub (`lscussel-uncisal`/conta do aluno) — recomendação
-  do enunciado, não crítica para aprovação, mas vale fechar. Não é algo que a IA consiga verificar
-  ou ativar por API; só o próprio aluno confirma/ativa em Settings → Password and authentication.
-
-Fora esse único ponto, **todos os requisitos obrigatórios do enunciado, nos 3 eixos e na
+**Todos os requisitos obrigatórios do enunciado, nos 3 eixos e na
 integração CI/CD, estão implementados e verificados** — a maioria com evidência real (comando
 rodado, teste automatizado, ou captura de tela), não só declaração.

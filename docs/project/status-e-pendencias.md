@@ -27,7 +27,7 @@ Atualizado em: 2026-09-22.
 | Telas próprias de gestão de usuários (criar/listar/ativar-desativar) e relatório de login, sem depender do Django Admin | ADR-029 |
 | Hierarquia de papéis com super-admin, prevenção de escalonamento de privilégio (admin nunca cria super-admin, nem forjando POST) | ADR-029 |
 | Backup completo (SQLite nativo + Fernet + Cloudflare R2), agendado + botão manual, fecha o R10 — configurado e testado com sucesso em produção, **incluindo restauração de teste real**, em 2026-09-22 | ADR-030, ADR-031, `docs/security/backup-recovery.md`, `docs/security/risk-matrix.md` (R10) |
-| Manual de estudos + roteiro de apresentação (vídeo de 5–10 min) | Arquivo **local, fora do repositório de propósito** (não versionado/publicado — repo é público): `docs/apresentacao-uncisal.md`, listado no `.gitignore`. Entregue ao usuário. |
+| Manual de estudos + roteiro de apresentação (vídeo de 5–10 min) | Roteiro/manual: arquivo **local, fora do repositório de propósito** (`docs/apresentacao-uncisal.md`, no `.gitignore`), entregue ao usuário. Vídeo gravado a partir do roteiro: público, linkado no `README.md` — [youtu.be/zeNkYWfGxD4](https://youtu.be/zeNkYWfGxD4) |
 | Papel do avaliador promovido para Admin (via `role_required`, sem tocar Django Admin) | ADR-029; e-mail da conta nunca registrado no repositório, por instrução explícita do usuário |
 | Auditoria final de menor privilégio (UFW, iptables, Fail2Ban, SSH, serviços do sistema) — achado e corrigido: `rpcbind` escutando desnecessariamente em `0.0.0.0:111` | ADR-032 |
 | 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — fecha R11 | `docs/security/risk-matrix.md` (R11) |

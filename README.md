@@ -4,6 +4,8 @@ Projeto da disciplina **Projeto Aplicado: Práticas de Mercado** (Pós-graduaç�
 
 Sistema web de abertura, direcionamento e acompanhamento de chamados de suporte, com três papéis de acesso (administrador, suporte e usuário), autenticação de duplo fator e proteção via Cloudflare, implantado com CI/CD em uma instância Oracle Cloud (Free Tier).
 
+📺 **[Vídeo de apresentação do projeto](https://youtu.be/zeNkYWfGxD4)**
+
 ## Sumário
 
 - [Arquitetura](#arquitetura)
@@ -169,8 +171,7 @@ conferência item a item, com evidência de cada um, em [`docs/cross-check.md`](
       `bantime = 24h` (exato da meta mínima), 5 jails ativos, auditoria de menor privilégio
       confirmada (ADR-032)
 - [x] O código está versionado em repositório público no GitHub, conta devidamente configurada
-      (Eixo 2) — push via PAT (Git Credential Manager); recomendação de 2FA na conta GitHub, a
-      confirmar (ver `docs/cross-check.md`)
+      (Eixo 2) — push via PAT (Git Credential Manager), 2FA ativo na conta
 - [x] `.gitignore` configurado, sem chaves/senhas expostas no código (Eixo 2) — hooks `gitleaks` +
       `detect-private-key` no pre-commit e no CI
 - [x] Aplicação possui Login, Página Interna e Logout, desenvolvida com auxílio de IA via IDE
