@@ -921,3 +921,53 @@ chave (nunca senha), sem login de root, e Fail2Ban banindo automaticamente tenta
 
 **Resultado**: nenhuma outra porta/serviço desnecessário encontrado. Auditoria concluída em
 2026-09-22.
+
+## ADR-033 — Validação final de segurança (teste de fogo) e decisão consciente contra overengineering
+
+**Contexto:** antes de considerar o projeto pronto pra entrega, uma rodada final de validação
+cobrindo as classes de vulnerabilidade mais comuns — não uma auditoria de código, um teste
+funcional real contra a aplicação em produção.
+
+**Testado (ao vivo, em produção, com dado de teste criado e removido no mesmo processo):**
+
+- **XSS**: zero ocorrências de `|safe`/`mark_safe`/`innerHTML` em todo o projeto (confirmado por
+  varredura, não só amostragem).
+- **Rotas expostas**: mapeadas todas as rotas registradas — nenhuma API JSON (sem DRF), só views
+  HTML + 2 endpoints POST-only. `/admin/` do Django está registrado mas exige login + `is_staff`
+  (confirmado: nenhum código do projeto jamais concede essa flag a nenhuma conta).
+- **Chaves de API expostas**: varrido o HTML/JS servido em produção — só CSRF token e a Turnstile
+  site key, as duas públicas por design.
+- **Banco de dados**: SQLite não escuta porta de rede; testados 6 caminhos comuns
+  (`db.sqlite3`, `.env` etc.) via HTTP — todos 404.
+- **SQL injection**: zero `.raw()`/interpolação de string em todo o projeto.
+- **Dependências inventadas**: as 19 dependências (produção + dev) verificadas uma a uma contra o
+  PyPI real — todas existem, nenhum nome suspeito.
+- **Forjar recurso de outro usuário (IDOR) — teste mais extenso**: criados dois usuários comuns
+  temporários e um chamado de teste dentro de um script rodado via `manage.py shell` (nunca
+  exposto por HTTP), simulando 9 tentativas de ataque de um usuário contra recurso de outro:
+  ver detalhe/editar chamado alheio, forjar `status`/`requester` na criação, acessar
+  `/usuarios/`/`/relatorio-login/`/`/backup/` sendo usuário comum, forjar criação de admin,
+  forjar desativação de conta alheia, e comparar a resposta de um ID que existe (mas não é seu)
+  contra um ID inexistente. **Todas as 9 tentativas bloqueadas no servidor** — nenhum dado
+  alterado, nenhuma diferença de resposta que permitisse enumerar recursos alheios. Dado de teste
+  removido ao final do mesmo script (confirmado antes de considerar concluído).
+- **Prompt Injection**: não se aplica ao produto em execução — confirmado por varredura que não
+  há nenhuma integração de IA/LLM em tempo de execução na aplicação (o uso de IA neste projeto é
+  só na etapa de desenvolvimento, orientado por `CLAUDE.md`, e não processa entrada de usuário
+  via LLM em produção).
+
+**Único gap real encontrado**: criação de chamado (`TicketCreateView`) não tem rate limiting —
+diferente de login/2FA/recuperação de senha, que já têm (`LoginThrottleService`,
+`PasswordResetThrottleService`). Um usuário autenticado poderia, em teoria, criar chamados em
+loop sem limite algum.
+
+**Decisão: não implementar.** O enunciado da disciplina (ver `docs/cross-check.md`) definia como
+suficiente, para o Eixo 3, uma aplicação com tela de login, página interna autenticada e logout
+funcional — o restante (RBAC em camadas, 2FA, backup cifrado, hierarquia de papéis, auditoria de
+login, etc.) já é substancialmente além do mínimo exigido. Adicionar rate limiting num fluxo de
+baixo risco (exige autenticação prévia; o pior cenário é poluir a própria base de chamados, não
+vazamento nem comprometimento de conta) só pelo gosto de fechar 100% dos vetores possíveis seria
+overengineering: gastar esforço de implementação e manutenção sem retorno proporcional ao escopo
+real do projeto (*Projeto Aplicado: Práticas de Mercado*, não um produto real com usuários
+externos). Registrado aqui como decisão deliberada, não como item esquecido — se o escopo do
+projeto mudasse (uso real, usuários externos), essa reavaliação mudaria de lado.

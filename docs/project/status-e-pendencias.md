@@ -32,6 +32,7 @@ Atualizado em: 2026-09-22.
 | Auditoria final de menor privilégio (UFW, iptables, Fail2Ban, SSH, serviços do sistema) — achado e corrigido: `rpcbind` escutando desnecessariamente em `0.0.0.0:111` | ADR-032 |
 | 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — fecha R11 | `docs/security/risk-matrix.md` (R11) |
 | Rotação de `EMAIL_HOST_PASSWORD`/`TURNSTILE_SECRET_KEY` — risco avaliado e aceito conscientemente pelo dono do projeto, não rotacionado | ADR-030 (decisão registrada com data e justificativa) |
+| Teste de fogo final (XSS, rotas expostas, chaves expostas, banco aberto, SQL injection, rate limiting, prompt injection, pacotes inventados, forjar recurso de outro usuário via IDOR — 9 cenários testados ao vivo) | ADR-033. Único gap real encontrado (rate limiting em criação de chamado) — decisão consciente de não implementar, para não gerar overengineering além do escopo real pedido pela disciplina |
 
 ## O que falta
 
