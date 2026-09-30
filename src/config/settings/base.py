@@ -46,6 +46,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.accounts.middleware.AbsoluteSessionTimeoutMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -97,10 +98,12 @@ LOGOUT_REDIRECT_URL = "accounts:login"
 
 # Sessao expira por INATIVIDADE, nao só por tempo fixo desde o login: SESSION_SAVE_EVERY_REQUEST
 # renova a expiração a cada requisição, entao SESSION_COOKIE_AGE conta a partir da última ação
-# do usuário, não do momento do login. Ver ADR de sessão em docs/architecture/decisions.md.
+# do usuário, não do momento do login. Ver ADR-035 em docs/architecture/decisions.md.
 SESSION_COOKIE_AGE = 60 * 30  # 30 minutos de inatividade
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# Teto absoluto, mesmo com uso contínuo (apps.accounts.middleware.AbsoluteSessionTimeoutMiddleware).
+SESSION_ABSOLUTE_TIMEOUT = 60 * 60 * 8
 
 LANGUAGE_CODE = "pt-br"
 TIME_ZONE = "America/Maceio"

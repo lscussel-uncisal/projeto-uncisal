@@ -35,6 +35,7 @@ Atualizado em: 2026-09-30.
 | Teste de fogo final (XSS, rotas expostas, chaves expostas, banco aberto, SQL injection, rate limiting, prompt injection, pacotes inventados, forjar recurso de outro usuário via IDOR — 9 cenários testados ao vivo) | ADR-033. Único gap real encontrado (rate limiting em criação de chamado) — decisão consciente de não implementar, para não gerar overengineering além do escopo real pedido pela disciplina |
 
 | Backup agendado não registrava o resultado (volume do banco read-only no container `backup`); backups em si estavam no R2 todo dia — corrigido, com testes de regressão | ADR-034, `docs/security/backup-recovery.md` |
+| Gestão de sessão conforme OWASP: expiração por inatividade (30 min) documentada e testada, e expiração absoluta (8 h) implementada | ADR-035, `docs/security/owasp-mitigations.md` (A07 → "Gestão de sessão") |
 
 ## O que falta
 

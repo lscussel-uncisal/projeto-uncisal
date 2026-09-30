@@ -1020,3 +1020,32 @@ derruba o processo; a conexão do snapshot recusa escrita; o snapshot contém as
 dependia justamente do passo que falhava. Um alarme (e-mail ao admin quando não houver
 `BackupRun` de sucesso nas últimas 26h) fecharia esse ponto cego. Fica registrado como melhoria
 possível, não implementada, pelo mesmo critério de escopo do ADR-033.
+
+## ADR-035 — Expiração absoluta de sessão (8 h), além da expiração por inatividade
+
+**Data:** 2026-09-30
+
+**Contexto:** a sessão já expirava após 30 min de inatividade (`SESSION_COOKIE_AGE` +
+`SESSION_SAVE_EVERY_REQUEST`) e ao fechar o navegador. Mas, como cada requisição renova o prazo,
+uma sessão usada sem parar nunca expirava. O *OWASP Session Management Cheat Sheet* recomenda os
+dois limites: por inatividade **e** absoluto. Essa configuração também não estava documentada nem
+coberta por teste; se alguém mudasse o valor por engano, nada acusaria.
+
+**Decisão:** `apps.accounts.middleware.AbsoluteSessionTimeoutMiddleware`, com
+`SESSION_ABSOLUTE_TIMEOUT = 8 h` (uma jornada de trabalho).
+
+- O horário de início fica na própria sessão (`auth_started_at`), gravada no servidor; o cliente
+  não consegue alterá-lo.
+- É registrado na primeira requisição autenticada, e não por um sinal de login, porque isso cobre
+  qualquer caminho de login sem acoplar o middleware a eles. Sessões que já existiam antes do
+  deploy começam a contar a partir do deploy, em vez de derrubar todo mundo de uma vez.
+- Passado o limite: `logout()` (apaga a sessão no banco), mensagem "Sua sessão expirou" e redirect
+  para o login preservando o `next`.
+- O Django não tem esse recurso nativo; um middleware de ~15 linhas é mais simples de auditar do
+  que uma dependência nova.
+
+**Testes:** `apps/accounts/tests/test_session_timeout.py` cobre os dois limites, a renovação a cada
+requisição, o cookie de sessão sem `Expires`/`Max-Age` e o logout apagando a sessão no servidor.
+
+**Não implementado:** limite de sessões simultâneas por usuário, pelo mesmo critério de escopo
+do ADR-033. Documentado em `docs/security/owasp-mitigations.md` → "Gestão de sessão".

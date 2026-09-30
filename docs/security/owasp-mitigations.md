@@ -26,10 +26,27 @@
 | Categoria | Onde | Como |
 |---|---|---|
 | **A01 — Broken Access Control** (Quebra de Controle de Acesso) | `apps/accounts/permissions.py` (`role_required`), `apps/tickets/services.py`/`apps/accounts/services.py` (`UserAdminService`) | RBAC sempre checado no backend, nunca em dado do cliente. Hierarquia de papéis (super-admin > admin > suporte > usuário) com prevenção explícita de escalonamento de privilégio: `UserCreateForm.clean_role` + `UserAdminService.creatable_roles` rejeitam um admin tentando criar/forjar uma conta super-admin mesmo via POST direto (não só escondendo a opção no formulário), e `UserAdminService.visible_to` faz admin comum receber 404 (nunca 403, pra não nem confirmar a existência da conta) ao tentar agir sobre uma conta super-admin. |
-| **A07 — Authentication Failures** (Falhas de Autenticação) | `apps/accounts/services.py` (`TwoFactorService`, `LoginThrottleService`, `TurnstileService`) | 2FA (TOTP/e-mail) + Cloudflare Turnstile + *rate limiting* no login e na verificação do código 2FA (`LoginThrottleService`, cobre `INVALID_CREDENTIALS` e `INVALID_2FA` pelo mesmo mecanismo) — sem isso, o código de 6 dígitos seria atacável por força bruta. |
+| **A07 — Authentication Failures** (Falhas de Autenticação) | `apps/accounts/services.py` (`TwoFactorService`, `LoginThrottleService`, `TurnstileService`), `apps/accounts/middleware.py`, `config/settings/base.py` (`SESSION_*`) | 2FA (TOTP/e-mail) + Cloudflare Turnstile + *rate limiting* no login e na verificação do código 2FA (`LoginThrottleService`, cobre `INVALID_CREDENTIALS` e `INVALID_2FA` pelo mesmo mecanismo) — sem isso, o código de 6 dígitos seria atacável por força bruta. **Gestão de sessão** (OWASP Session Management Cheat Sheet, ver seção abaixo): expiração por inatividade (30 min) e absoluta (8 h), sessão encerrada ao fechar o navegador, ID trocado no login, logout invalida a sessão no servidor, cookie `HttpOnly`/`Secure`/`SameSite=Lax`. |
 | **A09 — Security Logging and Alerting Failures** (Falhas de Registro e Alerta de Segurança) | `apps/accounts/models.py` (`LoginAttempt`), tela "Relatório de login" (`LoginReportView`) | Auditoria de toda tentativa de login/2FA/recuperação de senha, inclusive contra e-mails inexistentes (detecção de enumeração); alerta por e-mail em login bem-sucedido e em código 2FA incorreto (`AccountNotificationService`). Consultável, restrita a admin/super-admin. |
 | **A05 — Injection** (Injeção) | ORM do Django (todo o projeto), autoescape de template | Nenhum `.raw()`/SQL com string interpolada em código de aplicação; nenhum `\|safe`/`mark_safe` em conteúdo de usuário — verificado ao vivo com payload de script numa descrição de chamado, sai escapado (`&lt;script&gt;...`), nunca executa. |
 | **A04 — Cryptographic Failures** (Falhas Criptográficas) | `config/settings/base.py` (`PASSWORD_HASHERS`), `apps/core/fields.py` (`EncryptedCharField`), `apps/backup/services.py` | Argon2id como hasher de senha (1ª posição em `PASSWORD_HASHERS`); segredo TOTP e backup do banco cifrados em repouso, cada um com sua própria chave Fernet dedicada (nunca reaproveitada entre os dois); `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`/HSTS em `prod.py`. |
+
+### Gestão de sessão (parte da A07)
+
+A descrição oficial da A07 inclui, como falha, sessões que não são invalidadas no logout ou após
+um período de inatividade. Referência usada: *OWASP Session Management Cheat Sheet*.
+
+| Recomendação OWASP | Como está no projeto | Verificado por |
+|---|---|---|
+| Expiração por inatividade | 30 min desde a **última** requisição (`SESSION_COOKIE_AGE` + `SESSION_SAVE_EVERY_REQUEST`), controlada no servidor (sessão no banco com data de expiração) | `apps/accounts/tests/test_session_timeout.py` |
+| Expiração absoluta | 8 h desde o início da sessão, mesmo com uso contínuo (`SESSION_ABSOLUTE_TIMEOUT`, `AbsoluteSessionTimeoutMiddleware`) — ADR-035 | idem |
+| Sessão não sobrevive ao navegador | `SESSION_EXPIRE_AT_BROWSER_CLOSE = True` (cookie sem `Expires`/`Max-Age`) | idem |
+| Logout invalida no servidor | `LogoutView` apaga a sessão no banco, não só o cookie | idem |
+| Novo ID de sessão no login (contra *session fixation*) | `auth_login()` do Django troca a chave da sessão; é a função chamada ao concluir o 2FA | Comportamento do próprio Django |
+| Cookie protegido | `HttpOnly` (padrão do Django), `Secure` em produção (`prod.py`), `SameSite=Lax` (padrão) | Configurações conferidas no container de produção em 2026-09-30 |
+
+Não implementado, por decisão de escopo: limite de sessões simultâneas por usuário (a mesma conta
+logada em dois lugares ao mesmo tempo).
 
 ## As 5 descartadas — e por quê
 
