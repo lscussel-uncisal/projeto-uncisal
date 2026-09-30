@@ -136,6 +136,7 @@ Decisões de arquitetura registradas em [`docs/architecture/decisions.md`](docs/
 - [Backup e recuperação](docs/security/backup-recovery.md)
 - [O que nunca pode ser commitado](docs/security/nao-commitar.md)
 - [Política de divulgação de vulnerabilidade](SECURITY.md)
+- [Boas práticas para projetos futuros (documento auxiliar)](docs/security/boas-praticas-projetos-futuros.md)
 
 ## Segurança — mitigações OWASP Top 10:2025
 
