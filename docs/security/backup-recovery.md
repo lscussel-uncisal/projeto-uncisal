@@ -15,6 +15,10 @@ outro lugar. Testado com sucesso via botão "Backup agora" (Administração → 
 2026-09-22. Sem as variáveis de ambiente configuradas, `settings.BACKUP_ENABLED = False` e a
 tela mostra um aviso — não quebra o resto da aplicação (mesmo padrão do Turnstile).
 
+**Incidente corrigido em 2026-09-30 (ADR-034):** o backup agendado subia pro R2 todo dia, mas
+não conseguia gravar o `BackupRun` (volume do banco montado read-only no container `backup`),
+então a tela de histórico parecia parada desde 23/09. Nenhum backup foi perdido.
+
 ## O que é salvo
 
 - `db.sqlite3` inteiro (contém: hashes de senha — já seguros por si só —, segredo TOTP **já
@@ -40,12 +44,14 @@ tela mostra um aviso — não quebra o resto da aplicação (mesmo padrão do Tu
    não compartilham chave). Decisão de usar Fernet em vez de `gpg` (design original desta
    página): evita instalar o binário GnuPG na imagem Docker só pra isso, quando a dependência
    criptográfica já existe no projeto — ver ADR-030.
-4. **Destino:** Cloudflare R2 (bucket privado, prefixo `bkp_uncisal/` dentro dele), fora da VM —
+4. **Destino:** Cloudflare R2 (bucket privado, prefixo `backups/` dentro dele), fora da VM —
    protege contra perda de disco/instância da Oracle Cloud Free Tier (sem SLA de durabilidade).
 5. **Retenção:** mantém os `BACKUP_RETENTION_COUNT` (padrão 7) objetos mais recentes no prefixo;
    `BackupService._enforce_retention` apaga os mais antigos a cada execução bem-sucedida.
 6. **Histórico consultável:** cada execução (manual ou agendada) grava um `BackupRun` — visível
-   em Administração → Backup, para admin/super-admin.
+   em Administração → Backup, para admin/super-admin. Por isso o container `backup` monta o
+   volume do banco com escrita; a conexão que lê o banco pro snapshot é que fica proibida de
+   escrever (`PRAGMA query_only`, ADR-034).
 
 ## Como habilitar em produção
 

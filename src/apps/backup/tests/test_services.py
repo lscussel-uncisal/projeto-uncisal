@@ -1,7 +1,11 @@
+import sqlite3
+import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from cryptography.fernet import Fernet
+from django.db import OperationalError
 
 from apps.backup.models import BackupRun
 from apps.backup.services import BackupService
@@ -81,6 +85,39 @@ class TestBackupServiceUploadFlow:
 
         assert run.status == BackupRun.Status.FAILED
         assert "R2 unreachable" in run.error_message
+
+    def test_failure_to_record_the_run_is_logged_not_raised(self, r2_configured):
+        mock_client = MagicMock()
+        mock_client.list_objects_v2.return_value = {"Contents": []}
+        readonly = OperationalError("attempt to write a readonly database")
+
+        with (
+            patch("apps.backup.services.boto3.client", return_value=mock_client),
+            patch.object(BackupRun.objects, "create", side_effect=readonly),
+        ):
+            run = BackupService.run_full_backup()
+
+        assert run.status == BackupRun.Status.FAILED
+        assert "readonly" in run.error_message
+        assert run.pk is None
+
+    def test_snapshot_source_connection_refuses_writes(self):
+        source = BackupService._open_source_read_only()
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="readonly"):
+                source.execute("CREATE TABLE never_created (id INTEGER)")
+        finally:
+            source.close()
+
+    def test_snapshot_still_produces_a_valid_copy(self):
+        destination = Path(tempfile.mkdtemp()) / "snap.sqlite3"
+
+        BackupService._snapshot_database(destination)
+
+        copy = sqlite3.connect(destination)
+        tables = {row[0] for row in copy.execute("SELECT name FROM sqlite_master")}
+        copy.close()
+        assert "backup_backuprun" in tables
 
     def test_retention_deletes_objects_beyond_the_configured_count(self, r2_configured):
         r2_configured.BACKUP_RETENTION_COUNT = 2

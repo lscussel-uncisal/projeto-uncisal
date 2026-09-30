@@ -797,7 +797,8 @@ modelo de container "um processo por container"), o agendamento é um **segundo 
 horário atual com `02:00`. Mais simples de auditar linha a linha (projeto de segurança) do que
 depender de um scheduler adicional. Volumes de banco/media montados **read-only** nesse serviço —
 ele só precisa ler o banco pra tirar o snapshot, nunca escrever; um bug ali não consegue corromper
-o banco de produção.
+o banco de produção. **Premissa errada, corrigida no ADR-034:** o job também grava o próprio
+resultado (`BackupRun`) no banco, e com o volume read-only essa gravação falhava todo dia.
 
 **Decisão 3 — snapshot via API nativa do `sqlite3`, nunca `cp`:** `BackupService._snapshot_database`
 usa `sqlite3.Connection.backup()` (stdlib do Python, equivalente ao `.backup` do CLI) — garante
@@ -971,3 +972,51 @@ overengineering: gastar esforço de implementação e manutenção sem retorno p
 real do projeto (*Projeto Aplicado: Práticas de Mercado*, não um produto real com usuários
 externos). Registrado aqui como decisão deliberada, não como item esquecido — se o escopo do
 projeto mudasse (uso real, usuários externos), essa reavaliação mudaria de lado.
+
+## ADR-034 — Backup agendado rodava, mas nunca registrava o resultado (volume read-only)
+
+**Data:** 2026-09-30
+
+**Sintoma:** a tela Administração → Backup mostrava só as 2 execuções manuais de 22–23/09, como
+se o backup diário nunca tivesse rodado.
+
+**Diagnóstico (em produção, não suposição):**
+
+- O bucket R2 tinha **um backup por dia às 02:00 UTC** (25/09 a 30/09), e a retenção mantinha
+  os 7 mais recentes. Ou seja, snapshot, criptografia, upload e retenção funcionavam.
+- Rodar `python manage.py run_backup` à mão dentro do container `backup` reproduziu o erro:
+  `OperationalError: attempt to write a readonly database`. O upload terminava, mas a gravação
+  do `BackupRun` falhava, porque o ADR-030 montou `db_data` como `:ro` nesse serviço. O próprio
+  tratamento de erro também tentava gravar um `BackupRun` (FAILED) e caía igual, então o comando
+  morria com exceção não tratada, contrariando o contrato da própria classe.
+- O botão "Backup agora" funcionava porque roda no container `web`, que tem escrita no volume.
+- Achado paralelo: o container `backup` herdava o `HEALTHCHECK` HTTP da imagem do `web`, sem
+  servidor web pra responder, e aparecia como `unhealthy` permanentemente. Era um alarme falso
+  que não ajudava a ver o problema real.
+- Achado paralelo nos testes: `_snapshot_database` abria o banco sem `uri=True`. No Windows, o
+  banco em memória dos testes (`file:memorydb_default?mode=memory&cache=shared`) virava um
+  arquivo vazio qualquer, e o snapshot testado não tinha nenhuma tabela. Os testes só conferiam
+  o cabeçalho SQLite, então passavam mesmo assim. Produção não era afetada (usa caminho de
+  arquivo comum).
+
+**Correção:**
+
+1. `docker-compose.yml`: `db_data` passa a ser montado com escrita no serviço `backup`
+   (`media_data` continua `:ro`).
+2. A intenção original do ADR-030 (o snapshot nunca escreve no banco de produção) agora é
+   garantida na camada certa: a conexão de leitura do snapshot roda com
+   `PRAGMA query_only = ON` (`BackupService._open_source_read_only`), e qualquer escrita por ela
+   é recusada pelo SQLite.
+3. `BackupService._record`: se nem o registro do resultado puder ser gravado, loga e devolve o
+   `BackupRun` sem salvar, em vez de derrubar o processo.
+4. `healthcheck: disable: true` no serviço `backup`.
+5. `sqlite3.connect(..., uri=True)`: sem efeito pra caminho comum; nos testes, o snapshot agora
+   lê o banco de verdade.
+
+Testes de regressão em `apps/backup/tests/test_services.py`: falha ao gravar o registro não
+derruba o processo; a conexão do snapshot recusa escrita; o snapshot contém as tabelas reais.
+
+**Lição:** o backup "rodava" e ninguém via, porque o único sinal visível (a tela de histórico)
+dependia justamente do passo que falhava. Um alarme (e-mail ao admin quando não houver
+`BackupRun` de sucesso nas últimas 26h) fecharia esse ponto cego. Fica registrado como melhoria
+possível, não implementada, pelo mesmo critério de escopo do ADR-033.

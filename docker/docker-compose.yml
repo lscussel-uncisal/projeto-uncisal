@@ -29,13 +29,17 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env
-    # So le o banco pra tirar o snapshot (sqlite3 .backup) — nunca precisa escrever nele,
-    # entao o volume fica montado read-only aqui (defesa em profundidade: um bug neste
-    # processo nao consegue corromper o banco de producao).
+    # db_data precisa de escrita: o job grava o proprio resultado (BackupRun) no banco. Com
+    # ":ro" o upload pro R2 funcionava, mas o registro falhava todo dia (ADR-034). A conexao
+    # que le o banco pro snapshot continua proibida de escrever (PRAGMA query_only).
     volumes:
-      - db_data:/app/db:ro
+      - db_data:/app/db
       - media_data:/app/media:ro
     entrypoint: ["/app/backup-scheduler.sh"]
+    # A imagem herda o HEALTHCHECK HTTP do servico web, mas aqui nao ha servidor web —
+    # ficaria "unhealthy" pra sempre, escondendo um problema real atras de um falso.
+    healthcheck:
+      disable: true
     # BACKUP_ENABLED=False (sem as variaveis do R2 no .env) faz o job agendado falhar e
     # logar, sem quebrar o resto da aplicacao — mesmo comportamento do botao "Backup agora".
 

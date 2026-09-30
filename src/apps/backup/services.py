@@ -6,7 +6,7 @@ from pathlib import Path
 import boto3
 from cryptography.fernet import Fernet
 from django.conf import settings
-from django.db import connection
+from django.db import DatabaseError, connection
 from django.utils import timezone
 
 from apps.backup.models import BackupRun
@@ -32,6 +32,24 @@ class BackupService:
         )
 
     @staticmethod
+    def _open_source_read_only() -> sqlite3.Connection:
+        """O container de backup precisa de escrita no volume só pra gravar o BackupRun (via
+        ORM); a conexão que lê o banco pro snapshot continua proibida de escrever nele."""
+        source = sqlite3.connect(connection.settings_dict["NAME"], uri=True)
+        source.execute("PRAGMA query_only = ON")
+        return source
+
+    @staticmethod
+    def _record(**fields) -> BackupRun:
+        """Se nem o registro do resultado puder ser gravado, loga e devolve o objeto sem
+        salvar, em vez de derrubar o processo com uma exceção não tratada."""
+        try:
+            return BackupRun.objects.create(**fields)
+        except DatabaseError:
+            logger.error("Não foi possível gravar o registro do backup", exc_info=True)
+            return BackupRun(**fields)
+
+    @staticmethod
     def _snapshot_database(destination: Path) -> None:
         """sqlite3 .backup nativo — consistente mesmo com o banco em uso (ao contrário de
         copiar o arquivo direto, que pode capturar uma escrita no meio do caminho).
@@ -43,7 +61,7 @@ class BackupService:
         embrulha cada teste numa transação nunca commitada) é garantido. Ver
         TestBackupRunNowView.test_admin_triggering_a_successful_backup, que usa
         `django_db(transaction=True)` justamente para não segurar essa transação aberta."""
-        source = sqlite3.connect(connection.settings_dict["NAME"])
+        source = BackupService._open_source_read_only()
         dest = sqlite3.connect(str(destination))
         with dest:
             source.backup(dest)
@@ -71,7 +89,7 @@ class BackupService:
     @classmethod
     def run_full_backup(cls) -> BackupRun:
         if not settings.BACKUP_ENABLED:
-            return BackupRun.objects.create(
+            return cls._record(
                 status=BackupRun.Status.FAILED,
                 error_message=(
                     "Backup não está configurado (faltam variáveis de ambiente do R2 — "
@@ -99,6 +117,4 @@ class BackupService:
             )
         except Exception as exc:
             logger.error("Falha ao executar backup", exc_info=True)
-            return BackupRun.objects.create(
-                status=BackupRun.Status.FAILED, error_message=str(exc)[:500]
-            )
+            return cls._record(status=BackupRun.Status.FAILED, error_message=str(exc)[:500])

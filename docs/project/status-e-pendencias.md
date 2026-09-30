@@ -5,7 +5,7 @@ aqui, só apontar onde está registrado) de **o que ainda falta**, com detalhe s
 retomar o trabalho sem precisar redecidir nada — sem inventar requisito novo, só consolidando o
 que já foi combinado ao longo do projeto (nesta conversa e nas anteriores).
 
-Atualizado em: 2026-09-22.
+Atualizado em: 2026-09-30.
 
 ## O que já está pronto (não duplicar aqui — ver a fonte)
 
@@ -33,6 +33,8 @@ Atualizado em: 2026-09-22.
 | 2FA ativo nas contas de infraestrutura (Oracle Cloud, Cloudflare) — fecha R11 | `docs/security/risk-matrix.md` (R11) |
 | Rotação de `EMAIL_HOST_PASSWORD`/`TURNSTILE_SECRET_KEY` — risco avaliado e aceito conscientemente pelo dono do projeto, não rotacionado | ADR-030 (decisão registrada com data e justificativa) |
 | Teste de fogo final (XSS, rotas expostas, chaves expostas, banco aberto, SQL injection, rate limiting, prompt injection, pacotes inventados, forjar recurso de outro usuário via IDOR — 9 cenários testados ao vivo) | ADR-033. Único gap real encontrado (rate limiting em criação de chamado) — decisão consciente de não implementar, para não gerar overengineering além do escopo real pedido pela disciplina |
+
+| Backup agendado não registrava o resultado (volume do banco read-only no container `backup`); backups em si estavam no R2 todo dia — corrigido, com testes de regressão | ADR-034, `docs/security/backup-recovery.md` |
 
 ## O que falta
 
