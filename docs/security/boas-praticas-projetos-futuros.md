@@ -75,7 +75,7 @@ o projeto.
 |---|---|---|
 | Scripts injetados pela Cloudflare bloqueados pelo CSP | Conflito entre dois componentes sem decisão explícita | Desligar o que não é usado (ex.: Web Analytics) ou liberar no CSP o que é usado, conforme a documentação da Cloudflare |
 | `style-src 'unsafe-inline'` | Ponto mais fraco da política: permite injeção de CSS, que pode vazar dados da página | Evitar `style=""` e `<style>` inline desde o início; com Tailwind, quase sempre é possível |
-| Header CSP enviado **duplicado** em produção | O repositório define uma vez só; a segunda cópia vem de configuração do servidor. Com duas políticas, o navegador aplica as duas, e se divergirem vira um bug difícil de entender | Definir headers de segurança num lugar só e conferir o que realmente chega ao navegador (`curl -I`) |
+| Falso alarme: "CSP duplicado" | Uma primeira checagem com `curl -sIL` mostrou o header duas vezes e foi registrada aqui como problema. Reconferido em 2026-09-30: cada resposta envia **um único** CSP; o `-L` segue o redirect e imprime os headers das duas respostas (redirect + destino) | Ao auditar headers, olhar **uma resposta por vez** (`curl -s -D - -o /dev/null URL`, sem `-L`) antes de concluir algo |
 
 ## Desenvolvimento mais pragmático: evitar más práticas desde o dia zero
 
