@@ -4,7 +4,7 @@
 # CLI standalone oficial (https://github.com/tailwindlabs/tailwindcss/releases). Compilar aqui,
 # a cada imagem, evita depender de um static/css/app.css commitado ficar desatualizado se
 # algum template mudar as classes usadas.
-FROM python:3.12-slim AS css-builder
+FROM python:3.14-slim AS css-builder
 
 # Preenchido automaticamente pelo BuildKit (amd64 numa VM Oracle E2/AMD, arm64 numa Ampere A1 —
 # ver docs/infra/oracle-cloud-setup.md). Sem isto, o binario ficaria fixo para uma arquitetura so.
@@ -33,7 +33,7 @@ RUN mkdir -p /app/static/css \
     && tailwindcss -i /app/tailwind/input.css -o /app/static/css/app.css --minify
 
 # ---- build stage: instala dependencias em um virtualenv isolado ----
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -47,7 +47,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # ---- runtime stage: imagem final, minima e sem usuario root ----
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN groupadd --system app && useradd --system --gid app --home /app app
 
